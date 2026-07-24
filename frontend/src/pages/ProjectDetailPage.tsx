@@ -62,7 +62,7 @@ export function ProjectDetailPage() {
 
   const projectActions = (
     <>
-      {canQuitMember && demoQuitMember?.status !== 'quit' && (
+      {canQuitMember && project.status !== 'completed' && demoQuitMember && demoQuitMember.status !== 'quit' && (
         <SecondaryButton icon={<FileWarning size={17} />} onClick={() => {
           if (ensureWallet()) setQuitOpen(true)
         }}>{isInitiator ? `模拟 ${demoQuitMember?.name} 鸽掉` : '主动退出项目'}</SecondaryButton>

@@ -8,6 +8,7 @@ export const mockAbi = [
   'function batchResolveBounties(uint256 projectId)',
   'function createBounty(uint256 projectId,tuple bounty) returns (uint256 bountyId)',
   'function claimBounty(uint256 bountyId)',
+  'function cancelBountyClaim(uint256 bountyId)',
   'function submitWork(uint256 bountyId,string githubUrl,string demoUrl,string metadataUri)',
   'function requestRevision(uint256 bountyId,string feedback)',
   'function approveAndPay(uint256 bountyId)',

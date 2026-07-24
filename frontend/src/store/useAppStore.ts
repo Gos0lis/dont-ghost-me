@@ -42,6 +42,7 @@ interface AppStore {
   batchResolveBounties: (projectId: string) => Promise<TransactionReceipt>
   createBounty: (input: CreateBountyInput) => Promise<TransactionReceipt>
   claimBounty: (bountyId: string) => Promise<TransactionReceipt>
+  cancelBountyClaim: (bountyId: string) => Promise<TransactionReceipt>
   submitWork: (
     bountyId: string,
     submission: Omit<WorkSubmission, 'submittedAt'>,
@@ -58,11 +59,12 @@ const methodLabels: Record<string, string> = {
   confirmParticipation: '确认参与',
   lockDeposit: '锁定保证金',
   quitProject: '退出项目',
-  advanceProject: '确认项目里程碑',
+  advanceProject: '完成当前阶段',
   completeProject: '完成项目并结算',
   batchResolveBounties: '批量完成补救任务',
   createBounty: '发布救场悬赏',
   claimBounty: '领取救场任务',
+  cancelBountyClaim: '放弃救场任务',
   submitWork: '提交救场成果',
   requestRevision: '提交修改意见',
   approveAndPay: '验收并支付奖励',
@@ -145,6 +147,8 @@ export const useAppStore = create<AppStore>((set, get) => {
       run('batchResolveBounties', () => contractService.batchResolveBounties(projectId)),
     createBounty: (input) => run('createBounty', () => contractService.createBounty(input)),
     claimBounty: (bountyId) => run('claimBounty', () => contractService.claimBounty(bountyId)),
+    cancelBountyClaim: (bountyId) =>
+      run('cancelBountyClaim', () => contractService.cancelBountyClaim(bountyId)),
     submitWork: (bountyId, submission) =>
       run('submitWork', () => contractService.submitWork(bountyId, submission)),
     requestRevision: (bountyId, feedback) =>

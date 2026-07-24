@@ -21,7 +21,7 @@ const mechanisms = [
 ]
 
 const scenarios = [
-  { icon: BriefcaseBusiness, title: '黑客松组队', active: true, to: '/project/monad-hackathon' },
+  { icon: BriefcaseBusiness, title: '黑客松组队', active: true, to: '/hackathon' },
   { icon: Plane, title: '朋友旅行', active: true, to: '/travel' },
   { icon: Gamepad2, title: '游戏开黑', active: true, to: '/game-case' },
   { icon: Trophy, title: '比赛组队', active: false },
@@ -35,7 +35,7 @@ const scenarioDetails = [
     title: '开发者中途退出，Demo 还能按时交付吗？',
     description: '退出成员的保证金转为开发悬赏，奖励给完成智能合约、测试和交接的新救场者。',
     linkLabel: '进入黑客松 Demo',
-    to: '/project/monad-hackathon',
+    to: '/hackathon',
     tone: 'hackathon',
   },
   {

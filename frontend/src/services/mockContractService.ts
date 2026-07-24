@@ -206,10 +206,11 @@ export const mockContractService: ContractService = {
 
   async quitProject(projectId, memberId) {
     return writeTransaction('quitProject', (state, hash) => {
-      currentAccount(state)
+      const account = currentAccount(state)
       const project = state.projects.find((item) => item.id === projectId)
       const member = project?.members.find((item) => item.id === memberId)
       if (!project || !member) throw new Error('成员或项目不存在')
+      if (account.role !== 'initiator' && account.id !== member.id) throw new Error('只有成员本人或项目发起人可以确认退出')
       if (member.status === 'quit') throw new Error('该成员已经退出')
       const unfinishedTask = member.task
       member.status = 'quit'
@@ -353,6 +354,34 @@ export const mockContractService: ContractService = {
         timeline('bounty', `${account.name} 领取救场任务`, `悬赏“${bounty.title}”进入执行阶段`, hash),
       )
       return '救场任务领取成功'
+    })
+  },
+
+  async cancelBountyClaim(bountyId) {
+    return writeTransaction('cancelBountyClaim', (state, hash) => {
+      const account = currentAccount(state)
+      const bounty = state.bounties.find((item) => item.id === bountyId)
+      const project = state.projects.find((item) => item.id === bounty?.projectId)
+      if (!bounty || !project) throw new Error('悬赏不存在')
+      if (bounty.rescuerId !== account.id) throw new Error('只有当前领取者可以放弃任务')
+      if (!['claimed', 'revision_required'].includes(bounty.status)) throw new Error('当前状态不能放弃任务')
+      const rescuerName = bounty.rescuerName ?? account.name
+      bounty.status = 'open'
+      delete bounty.rescuerId
+      delete bounty.rescuerName
+      delete bounty.rescuerAddress
+      delete bounty.submission
+      delete bounty.revisionFeedback
+      project.status = 'rescue_needed'
+      project.timeline.push(
+        timeline(
+          'warning',
+          `${rescuerName} 放弃救场任务`,
+          `悬赏“${bounty.title}”已重新开放，等待新的救场者领取`,
+          hash,
+        ),
+      )
+      return '已放弃救场任务，悬赏重新开放领取'
     })
   },
 

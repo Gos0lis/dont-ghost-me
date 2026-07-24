@@ -28,6 +28,7 @@ export interface ContractService {
   batchResolveBounties(projectId: string): Promise<TransactionResponse>
   createBounty(input: CreateBountyInput): Promise<TransactionResponse>
   claimBounty(bountyId: string): Promise<TransactionResponse>
+  cancelBountyClaim(bountyId: string): Promise<TransactionResponse>
   submitWork(bountyId: string, submission: Omit<WorkSubmission, 'submittedAt'>): Promise<TransactionResponse>
   requestRevision(bountyId: string, feedback: string): Promise<TransactionResponse>
   approveAndPay(bountyId: string): Promise<TransactionResponse>

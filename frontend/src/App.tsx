@@ -7,6 +7,7 @@ import { CreateBountyPage } from './pages/CreateBountyPage'
 import { CreateProjectPage } from './pages/CreateProjectPage'
 import { HomePage } from './pages/HomePage'
 import { GameCasePage } from './pages/GameCasePage'
+import { HackathonScenarioPage } from './pages/HackathonScenarioPage'
 import { MyTasksPage } from './pages/MyTasksPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProjectDetailPage } from './pages/ProjectDetailPage'
@@ -44,6 +45,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/create" element={<CreateProjectPage />} />
+          <Route path="/hackathon" element={<HackathonScenarioPage />} />
           <Route path="/travel" element={<TravelScenarioPage />} />
           <Route path="/game-case" element={<GameCasePage />} />
           <Route path="/projects" element={<ProjectsPage />} />

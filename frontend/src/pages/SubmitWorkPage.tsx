@@ -1,9 +1,9 @@
-import { ArrowLeft, CircleCheck, GitBranch, Link2, Send } from 'lucide-react'
+import { ArrowLeft, CircleCheck, GitBranch, HeartCrack, Link2, Send } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { FormField, TextArea, TextInput } from '../components/ui/FormField'
-import { PrimaryButton } from '../components/ui/Buttons'
+import { PrimaryButton, SecondaryButton } from '../components/ui/Buttons'
 import { useAppStore } from '../store/useAppStore'
 
 export function SubmitWorkPage() {
@@ -11,8 +11,11 @@ export function SubmitWorkPage() {
   const navigate = useNavigate()
   const bounty = useAppStore((state) => state.bounties.find((item) => item.id === bountyId))
   const submitWork = useAppStore((state) => state.submitWork)
+  const cancelBountyClaim = useAppStore((state) => state.cancelBountyClaim)
   const pending = useAppStore((state) => state.pendingMethod === 'submitWork')
+  const cancelling = useAppStore((state) => state.pendingMethod === 'cancelBountyClaim')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
   const [form, setForm] = useState({
     githubUrl: 'https://github.com/demo/dont-ghost-me-contract',
     demoUrl: 'https://testnet.monad.xyz/address/0x1234...5678',
@@ -36,7 +39,10 @@ export function SubmitWorkPage() {
               <FormField label="测试结果说明"><TextArea value={form.testNotes} onChange={(event) => setForm({ ...form, testNotes: event.target.value })} /></FormField>
               <FormField label="交接说明"><TextArea value={form.handoverNotes} onChange={(event) => setForm({ ...form, handoverNotes: event.target.value })} /></FormField>
             </div>
-            <PrimaryButton icon={<Send size={17} />} onClick={() => setConfirmOpen(true)}>提交成果等待验收</PrimaryButton>
+            <div className="submit-form-actions">
+              <PrimaryButton icon={<Send size={17} />} onClick={() => setConfirmOpen(true)}>提交成果等待验收</PrimaryButton>
+              <SecondaryButton className="danger-outline" icon={<HeartCrack size={17} />} onClick={() => setCancelOpen(true)}>狠心放弃任务</SecondaryButton>
+            </div>
           </div>
         </section>
         <aside className="submit-aside">
@@ -57,6 +63,17 @@ export function SubmitWorkPage() {
         details={<><span>合约方法</span><strong>submitWork(bountyId, metadata)</strong><span>目标状态</span><strong>等待验收</strong></>}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => void submitWork(bounty.id, form).then(() => navigate(`/bounty/${bounty.id}`)).catch(() => undefined)}
+      />
+      <ConfirmDialog
+        open={cancelOpen}
+        danger
+        title="确认狠心放弃这个救场任务？"
+        description="放弃后，本次领取关系会解除，悬赏重新回到大厅，其他外部救场者可以再次领取。奖励资金仍保留在救场池中。"
+        confirmLabel="确认放弃并重新开放"
+        loading={cancelling}
+        details={<><span>合约方法</span><strong>cancelBountyClaim(bountyId)</strong><span>目标状态</span><strong>重新开放领取</strong></>}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={() => void cancelBountyClaim(bounty.id).then(() => navigate(`/bounty/${bounty.id}`)).catch(() => undefined)}
       />
     </div>
   )

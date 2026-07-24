@@ -6,9 +6,7 @@ import {
   CircleDollarSign,
   CheckCircle2,
   Clock3,
-  Code2,
   FileWarning,
-  Rocket,
   ShieldCheck,
   UsersRound,
 } from 'lucide-react'
@@ -21,7 +19,7 @@ import { Timeline } from '../components/Timeline'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { PrimaryButton, SecondaryButton } from '../components/ui/Buttons'
 import { StatusBadge } from '../components/ui/StatusBadge'
-import { DEMO_PROJECT_ID, TRAVEL_PROJECT_ID } from '../data/mockData'
+import { TRAVEL_PROJECT_ID } from '../data/mockData'
 import { useAppStore } from '../store/useAppStore'
 import { formatDate } from '../utils/format'
 
@@ -50,7 +48,6 @@ export function ProjectDetailPage() {
   const needsRescue = project.status === 'rescue_needed'
   const canAdvance = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress < 80
   const canComplete = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress >= 80
-  const isHackathonDemo = project.id === DEMO_PROJECT_ID
 
   const ensureWallet = () => {
     if (!wallet.isConnected) {
@@ -65,13 +62,13 @@ export function ProjectDetailPage() {
       {canQuitMember && project.status !== 'completed' && demoQuitMember && demoQuitMember.status !== 'quit' && (
         <SecondaryButton icon={<FileWarning size={17} />} onClick={() => {
           if (ensureWallet()) setQuitOpen(true)
-        }}>{isInitiator ? `模拟 ${demoQuitMember?.name} 鸽掉` : '主动退出项目'}</SecondaryButton>
+        }}>{isInitiator ? `模拟 ${demoQuitMember?.name} 鸽掉` : '退出鸽掉'}</SecondaryButton>
       )}
       {needsRescue && isInitiator && (
         <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>发布救场悬赏</PrimaryButton>
       )}
       {canAdvance && (
-        <PrimaryButton onClick={() => ensureWallet() && setMilestoneOpen(true)}>确认当前里程碑</PrimaryButton>
+        <PrimaryButton onClick={() => ensureWallet() && setMilestoneOpen(true)}>完成当前阶段</PrimaryButton>
       )}
       {canComplete && (
         <PrimaryButton icon={<CheckCircle2 size={17} />} onClick={() => ensureWallet() && setCompleteOpen(true)}>完成项目并结算</PrimaryButton>
@@ -81,30 +78,8 @@ export function ProjectDetailPage() {
 
   return (
     <div className="page-shell project-detail">
-      <Link className="back-link" to={isHackathonDemo ? '/' : '/projects'}><ArrowLeft size={16} />{isHackathonDemo ? '返回首页' : '返回我的项目'}</Link>
-      {isHackathonDemo && (
-        <div className="scene-switch">
-          <Link className="active" to={`/project/${DEMO_PROJECT_ID}`}><span>01</span><strong>黑客松协作</strong><small>开发者中途退出</small></Link>
-          <Link to="/travel"><span>02</span><strong>朋友旅行</strong><small>拆分补救奖励</small></Link>
-          <Link to="/game-case"><span>03</span><strong>游戏组队</strong><small>已完成案例回放</small></Link>
-        </div>
-      )}
-      {isHackathonDemo ? (
-        <section className="hackathon-demo-hero">
-          <div className="hackathon-hero-copy">
-            <span className="hackathon-kicker"><Code2 size={16} />第一个完整应用场景 · 黑客松</span>
-            <div className="hackathon-title-row"><h1>开发者中途鸽了，<br />Demo 还能按时交付吗？</h1><StatusBadge status={project.status} /></div>
-            <p>Yunn 退出后，100 MON 保证金不会被团队瓜分，而是用于雇佣新的开发者完成智能合约缺口。</p>
-            <div className="hackathon-hero-actions">{projectActions}</div>
-          </div>
-          <div className="hackathon-hero-art">
-            <div className="hackathon-code-card"><code>function rescue()</code><span>任务缺口 → 公开悬赏</span></div>
-            <img src="/assets/pigeons/pigeon-builder-laptop.png" alt="正在完成智能合约救场任务的紫色鸽子" />
-            <div className="hackathon-rescue-chip"><Rocket size={17} /><div><span>救场悬赏池</span><strong>{project.rescuePool} MON</strong></div></div>
-          </div>
-        </section>
-      ) : (
-        <div className="project-hero-panel">
+      <Link className="back-link" to="/projects"><ArrowLeft size={16} />返回我的项目</Link>
+      <div className="project-hero-panel">
         <div>
           <div className="project-title-row"><span className="project-mark">M</span><StatusBadge status={project.status} /></div>
           <h1>{project.name}</h1>
@@ -118,8 +93,7 @@ export function ProjectDetailPage() {
         <div className="project-hero-actions">
           {projectActions}
         </div>
-        </div>
-      )}
+      </div>
 
       {['rescue_needed', 'rescue_in_progress'].includes(project.status) && (
         <div className="warning-banner">
@@ -171,9 +145,9 @@ export function ProjectDetailPage() {
       <ConfirmDialog
         open={milestoneOpen}
         loading={pending === 'advanceProject'}
-        title="确认当前项目里程碑？"
-        description="确认后将生成模拟链上交易，更新整体进度和项目时间线。"
-        confirmLabel="确认里程碑并推进进度"
+        title="确认完成当前阶段？"
+        description="确认后将生成模拟链上交易，完成当前阶段并更新整体进度和项目时间线。"
+        confirmLabel="完成当前阶段"
         details={<><span>操作</span><strong>advanceProject(projectId)</strong><span>预计进度</span><strong>{project.status === 'active_again' ? '90%' : '80%'}</strong></>}
         onClose={() => setMilestoneOpen(false)}
         onConfirm={() => void advanceProject(project.id).then(() => setMilestoneOpen(false)).catch(() => undefined)}

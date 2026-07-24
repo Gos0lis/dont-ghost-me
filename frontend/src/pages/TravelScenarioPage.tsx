@@ -128,7 +128,7 @@ export function TravelScenarioPage() {
         <Link className="back-link" to="/"><ArrowLeft size={16} />返回首页</Link>
 
         <div className="scene-switch">
-          <Link to="/project/monad-hackathon"><span>01</span><strong>黑客松协作</strong><small>开发者中途退出</small></Link>
+          <Link to="/hackathon"><span>01</span><strong>黑客松协作</strong><small>开发者中途退出</small></Link>
           <Link className="active" to="/travel"><span>02</span><strong>朋友旅行</strong><small>同行者临时鸽了</small></Link>
           <Link to="/game-case"><span>03</span><strong>游戏组队</strong><small>已完成案例回放</small></Link>
         </div>

@@ -23,8 +23,8 @@ const mechanisms = [
 const scenarios = [
   { icon: BriefcaseBusiness, title: '黑客松组队', active: true, to: '/project/monad-hackathon' },
   { icon: Plane, title: '朋友旅行', active: true, to: '/travel' },
-  { icon: Trophy, title: '比赛组队', active: false },
   { icon: Gamepad2, title: '游戏开黑', active: true, to: '/game-case' },
+  { icon: Trophy, title: '比赛组队', active: false },
   { icon: Rocket, title: '创业协作', active: false },
 ]
 

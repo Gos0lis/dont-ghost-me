@@ -4,15 +4,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/generate-worker.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "latest",
+    "autoprefixer": "^10.5.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.26.0",
+    "postcss": "^8.5.22",
     "react": "latest",
     "react-dom": "latest",
+    "react-router-dom": "^7.18.1",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^3.4.17",
     "viem": "latest",
-    "wagmi": "latest"
+    "wagmi": "latest",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/react": "latest",

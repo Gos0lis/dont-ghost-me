@@ -28,6 +28,36 @@ const scenarios = [
   { icon: Rocket, title: '创业协作', active: false },
 ]
 
+const scenarioDetails = [
+  {
+    icon: BriefcaseBusiness,
+    eyebrow: '黑客松协作 · 补救机制演示',
+    title: '开发者中途退出，Demo 还能按时交付吗？',
+    description: '退出成员的保证金转为开发悬赏，奖励给完成智能合约、测试和交接的新救场者。',
+    linkLabel: '进入黑客松 Demo',
+    to: '/project/monad-hackathon',
+    tone: 'hackathon',
+  },
+  {
+    icon: MapPinned,
+    eyebrow: '朋友旅行 · 补救机制演示',
+    title: '五人旅行，有人临时鸽了怎么办？',
+    description: '退出者的保证金不直接平分，而是奖励给找到替补、转卖门票、修改酒店和重新协调行程的人。',
+    linkLabel: '进入旅行救场 Demo',
+    to: '/travel',
+    tone: 'travel',
+  },
+  {
+    icon: Gamepad2,
+    eyebrow: '游戏组队 · 已完成案例回放',
+    title: '队友赛前鸽了，还能准时开黑吗？',
+    description: 'Kai 的保证金用于雇来 Yunn 补位、完成阵容交接和赛前训练，最终顺利完成比赛。',
+    linkLabel: '进入游戏回放 Demo',
+    to: '/game-case',
+    tone: 'game',
+  },
+]
+
 export function HomePage() {
   const bounties = useAppStore((state) => state.bounties)
   const mainBounty = bounties.find((item) => item.id === 'smart-contract-mvp')
@@ -96,15 +126,19 @@ export function HomePage() {
             </button>
           ))}
         </div>
-        <article className="travel-card">
-          <div className="travel-icon"><MapPinned size={28} /></div>
-          <div>
-            <span className="eyebrow">朋友旅行 · 补救机制示例</span>
-            <h3>五人旅行，有人临时鸽了怎么办？</h3>
-            <p>退出者的保证金不直接平分，而是奖励给找到替补、转卖门票、修改酒店和重新协调行程的人。</p>
-          </div>
-          <Link className="text-link" to="/travel">进入旅行救场 Demo <ArrowRight size={15} /></Link>
-        </article>
+        <div className="scenario-detail-grid">
+          {scenarioDetails.map(({ icon: Icon, eyebrow, title, description, linkLabel, to, tone }) => (
+            <article className={`scenario-detail-card scenario-detail-${tone}`} key={to}>
+              <div className="scenario-detail-icon"><Icon size={25} /></div>
+              <div>
+                <span className="eyebrow">{eyebrow}</span>
+                <h3>{title}</h3>
+                <p>{description}</p>
+              </div>
+              <Link className="text-link" to={to}>{linkLabel} <ArrowRight size={15} /></Link>
+            </article>
+          ))}
+        </div>
       </section>
     </>
   )

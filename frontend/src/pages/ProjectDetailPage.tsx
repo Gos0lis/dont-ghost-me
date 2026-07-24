@@ -6,7 +6,9 @@ import {
   CircleDollarSign,
   CheckCircle2,
   Clock3,
+  Code2,
   FileWarning,
+  Rocket,
   ShieldCheck,
   UsersRound,
 } from 'lucide-react'
@@ -19,6 +21,7 @@ import { Timeline } from '../components/Timeline'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { PrimaryButton, SecondaryButton } from '../components/ui/Buttons'
 import { StatusBadge } from '../components/ui/StatusBadge'
+import { DEMO_PROJECT_ID } from '../data/mockData'
 import { useAppStore } from '../store/useAppStore'
 import { formatDate } from '../utils/format'
 
@@ -47,17 +50,7 @@ export function ProjectDetailPage() {
   const needsRescue = project.status === 'rescue_needed'
   const canAdvance = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress < 80
   const canComplete = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress >= 80
-  const nextStep = project.status === 'completed'
-    ? '流程已完成：查看最终时间线和保证金结算'
-    : needsRescue
-      ? '下一步：Caro 发布救场悬赏'
-      : project.status === 'rescue_in_progress'
-        ? '下一步：Builder 07 提交成果，再切回 Caro 验收'
-        : project.status === 'active_again'
-          ? '下一步：Caro 确认最终里程碑并完成项目结算'
-          : project.progress >= 80
-            ? '下一步：Caro 完成项目并解锁保证金'
-            : '下一步：完成团队任务，或模拟 Yunn 中途退出'
+  const isHackathonDemo = project.id === DEMO_PROJECT_ID
 
   const ensureWallet = () => {
     if (!wallet.isConnected) {
@@ -67,10 +60,51 @@ export function ProjectDetailPage() {
     return true
   }
 
+  const projectActions = (
+    <>
+      {canQuitYunn && yunn?.status !== 'quit' && (
+        <SecondaryButton icon={<FileWarning size={17} />} onClick={() => {
+          if (ensureWallet()) setQuitOpen(true)
+        }}>{isInitiator ? '模拟 Yunn 鸽掉' : '主动退出项目'}</SecondaryButton>
+      )}
+      {needsRescue && isInitiator && (
+        <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>发布救场悬赏</PrimaryButton>
+      )}
+      {canAdvance && (
+        <PrimaryButton onClick={() => ensureWallet() && setMilestoneOpen(true)}>确认当前里程碑</PrimaryButton>
+      )}
+      {canComplete && (
+        <PrimaryButton icon={<CheckCircle2 size={17} />} onClick={() => ensureWallet() && setCompleteOpen(true)}>完成项目并结算</PrimaryButton>
+      )}
+    </>
+  )
+
   return (
     <div className="page-shell project-detail">
-      <Link className="back-link" to="/projects"><ArrowLeft size={16} />返回我的项目</Link>
-      <div className="project-hero-panel">
+      <Link className="back-link" to={isHackathonDemo ? '/' : '/projects'}><ArrowLeft size={16} />{isHackathonDemo ? '返回首页' : '返回我的项目'}</Link>
+      {isHackathonDemo && (
+        <div className="scene-switch">
+          <Link className="active" to={`/project/${DEMO_PROJECT_ID}`}><span>01</span><strong>黑客松协作</strong><small>开发者中途退出</small></Link>
+          <Link to="/travel"><span>02</span><strong>朋友旅行</strong><small>拆分补救奖励</small></Link>
+          <Link to="/game-case"><span>03</span><strong>游戏组队</strong><small>已完成案例回放</small></Link>
+        </div>
+      )}
+      {isHackathonDemo ? (
+        <section className="hackathon-demo-hero">
+          <div className="hackathon-hero-copy">
+            <span className="hackathon-kicker"><Code2 size={16} />第一个完整应用场景 · 黑客松</span>
+            <div className="hackathon-title-row"><h1>开发者中途鸽了，<br />Demo 还能按时交付吗？</h1><StatusBadge status={project.status} /></div>
+            <p>Yunn 退出后，100 MON 保证金不会被团队瓜分，而是用于雇佣新的开发者完成智能合约缺口。</p>
+            <div className="hackathon-hero-actions">{projectActions}</div>
+          </div>
+          <div className="hackathon-hero-art">
+            <div className="hackathon-code-card"><code>function rescue()</code><span>任务缺口 → 公开悬赏</span></div>
+            <img src="/assets/pigeons/pigeon-builder-laptop.png" alt="正在完成智能合约救场任务的紫色鸽子" />
+            <div className="hackathon-rescue-chip"><Rocket size={17} /><div><span>救场悬赏池</span><strong>{project.rescuePool} MON</strong></div></div>
+          </div>
+        </section>
+      ) : (
+        <div className="project-hero-panel">
         <div>
           <div className="project-title-row"><span className="project-mark">M</span><StatusBadge status={project.status} /></div>
           <h1>{project.name}</h1>
@@ -82,27 +116,10 @@ export function ProjectDetailPage() {
           </div>
         </div>
         <div className="project-hero-actions">
-          {canQuitYunn && yunn?.status !== 'quit' && (
-            <SecondaryButton icon={<FileWarning size={17} />} onClick={() => {
-              if (ensureWallet()) setQuitOpen(true)
-            }}>{isInitiator ? '模拟 Yunn 鸽掉' : '主动退出项目'}</SecondaryButton>
-          )}
-          {needsRescue && isInitiator && (
-            <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>发布救场悬赏</PrimaryButton>
-          )}
-          {canAdvance && (
-            <PrimaryButton onClick={() => ensureWallet() && setMilestoneOpen(true)}>确认当前里程碑</PrimaryButton>
-          )}
-          {canComplete && (
-            <PrimaryButton icon={<CheckCircle2 size={17} />} onClick={() => ensureWallet() && setCompleteOpen(true)}>完成项目并结算</PrimaryButton>
-          )}
+          {projectActions}
         </div>
-      </div>
-
-      <div className={`demo-next-step ${project.status === 'completed' ? 'complete' : ''}`}>
-        <span>现场演示指引</span><strong>{nextStep}</strong>
-        <small>当前身份：{wallet.account?.name ?? '未连接钱包'}</small>
-      </div>
+        </div>
+      )}
 
       {['rescue_needed', 'rescue_in_progress'].includes(project.status) && (
         <div className="warning-banner">

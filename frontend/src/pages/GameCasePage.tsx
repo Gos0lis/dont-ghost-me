@@ -137,12 +137,6 @@ export function GameCasePage() {
           </div>
         </section>
 
-        <div className={`demo-next-step ${step === 7 ? 'complete' : ''}`}>
-          <span>现场演示指引</span>
-          <strong>{playing ? `正在执行：${snapshot.label}` : step === 7 ? '完整闭环已完成：50 MON 救场奖励已支付，200 MON 保证金已解锁' : '点击进度节点查看任意阶段，或继续播放自动回放'}</strong>
-          <small>这是已结算的链上历史回放，不会改变另外两个 Demo 的当前状态</small>
-        </div>
-
         <section className="game-balance-grid">
           <BalanceCard label="战队总保证金" value={250} unit="MON" icon={<ShieldCheck size={20} />} />
           <BalanceCard label="当前锁定" value={snapshot.locked} unit="MON" accent="green" icon={<UsersRound size={20} />} />

@@ -172,12 +172,6 @@ export function TravelScenarioPage() {
           </div>
         </section>
 
-        <div className={`demo-next-step ${isCompleted ? 'complete' : ''}`}>
-          <span>现场演示指引</span>
-          <strong>{!hasQuit ? '下一步：Caro 确认 Yunn 临时退出' : !allPublished ? '下一步：将 100 MON 拆成三项悬赏' : !allResolved ? '下一步：快速模拟三项补救完成并付款' : !isCompleted ? '下一步：完成旅行项目并解锁保证金' : '旅行救场完整闭环已完成'}</strong>
-          <small>当前身份：{wallet.account?.name ?? '未连接钱包'} · 操作身份需要 Caro</small>
-        </div>
-
         <section className="travel-story">
           <div className="travel-step done"><span>01</span><LockKeyhole size={20} /><div><strong>五人先承诺</strong><p>每人锁定 100 MON，并认领旅行任务。</p></div></div>
           <div className={`travel-step ${hasQuit ? 'danger' : ''}`}><span>02</span><Plane size={20} /><div><strong>Yunn 临时退出</strong><p>{hasQuit ? '100 MON 已进入补救悬赏池。' : '点击上方按钮模拟链上退出交易。'}</p></div></div>

@@ -2,6 +2,7 @@ import type { Bounty, MockChainState, Project, WalletAccount } from '../contract
 
 export const DEMO_PROJECT_ID = 'monad-hackathon'
 export const DEMO_BOUNTY_ID = 'smart-contract-mvp'
+export const TRAVEL_PROJECT_ID = 'five-friends-trip'
 
 export const demoAccounts: WalletAccount[] = [
   {
@@ -120,6 +121,96 @@ const initialProject: Project = {
   ],
 }
 
+const travelProject: Project = {
+  id: TRAVEL_PROJECT_ID,
+  name: '五人京都旅行计划',
+  description: '五位朋友提前约定共同出行，分别负责门票、酒店、交通、路线和应急准备。',
+  category: '朋友旅行',
+  goal: '顺利完成五人京都旅行，出现临时退出时用悬赏快速补救',
+  creatorAddress: demoAccounts[0].address,
+  startDate: '2026-08-12',
+  deadline: '2026-08-18',
+  status: 'active',
+  progress: 35,
+  totalDeposit: 500,
+  lockedDeposit: 500,
+  rescuePool: 0,
+  reservedBounty: 0,
+  members: [
+    {
+      id: 'caro',
+      name: 'Caro',
+      address: demoAccounts[0].address,
+      role: '旅行发起人与统筹',
+      task: '完成总行程、预算分工和每日集合安排',
+      taskDeadline: '2026-08-08',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'momo',
+      name: 'Momo',
+      address: '0xA815C7F238E94102',
+      role: '门票与同行确认',
+      task: '购买景点门票并按约定时间共同出行',
+      taskDeadline: '2026-08-06',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'yoyo',
+      name: 'Yoyo',
+      address: '0x492817354A7D3E22',
+      role: '酒店预订',
+      task: '确认酒店订单、房型和入住信息',
+      taskDeadline: '2026-08-05',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'jimmy',
+      name: 'Jimmy',
+      address: '0x63D21A5B8413CA90',
+      role: '交通协调',
+      task: '联系包车、机场接送和跨城交通',
+      taskDeadline: '2026-08-07',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'beihai',
+      name: '北海',
+      address: '0xB3E1A18F93D20561',
+      role: '路线与应急',
+      task: '整理每日路线、旅行保险和应急清单',
+      taskDeadline: '2026-08-09',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+  ],
+  timeline: [
+    {
+      id: 'travel-project-created',
+      type: 'project',
+      title: '旅行承诺创建',
+      description: 'Caro 发起五人京都旅行，并分配酒店、门票、交通和路线任务',
+      timestamp: '2026-07-24T11:10:00.000Z',
+    },
+    {
+      id: 'travel-deposits-locked',
+      type: 'member',
+      title: '五人确认出行',
+      description: '每人锁定 100 MON，共计 500 MON 旅行承诺保证金',
+      timestamp: '2026-07-24T11:25:00.000Z',
+    },
+  ],
+}
+
 export const showcaseBounties: Bounty[] = [
   {
     id: 'pitch-video',
@@ -159,11 +250,11 @@ export const showcaseBounties: Bounty[] = [
 
 export function createInitialChainState(): MockChainState {
   return {
-    version: 4,
+    version: 5,
     blockNumber: 12_345_670,
     accounts: structuredClone(demoAccounts),
     connection: { isConnected: false },
-    projects: [structuredClone(initialProject)],
+    projects: [structuredClone(initialProject), structuredClone(travelProject)],
     bounties: structuredClone(showcaseBounties),
     receipts: {},
   }

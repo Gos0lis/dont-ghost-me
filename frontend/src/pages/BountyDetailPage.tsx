@@ -22,6 +22,7 @@ export function BountyDetailPage() {
   if (!bounty) return <div className="page-shell">悬赏不存在。</div>
 
   const isRescuer = wallet.account?.role === 'rescuer'
+  const sourceMember = project?.members.find((item) => item.id === bounty.sourceMemberId)
   const isClaimedByMe = bounty.rescuerId === wallet.account?.id
   const action = () => {
     if (!wallet.isConnected) return notify('info', '请先连接钱包', '领取救场任务需要钱包签名')
@@ -61,7 +62,7 @@ export function BountyDetailPage() {
           <section className="panel"><span className="eyebrow">验收标准</span><h2>团队会如何验收</h2><div className="check-list">{bounty.acceptanceCriteria.map((item) => <div key={item}><ShieldCheck size={18} /><span>{item}</span></div>)}</div></section>
         </div>
         <aside className="bounty-info-side">
-          <section className="panel fund-source-card"><Banknote size={25} /><span className="eyebrow">资金来源说明</span><h3>来自退出成员的违约保证金</h3><p>该悬赏奖励来自退出成员的违约保证金，不是由原团队成员额外支付。</p><div><span>Yunn 保证金</span><strong>100 MON</strong></div><div><span>本悬赏预留</span><strong>{bounty.reward} MON</strong></div></section>
+          <section className="panel fund-source-card"><Banknote size={25} /><span className="eyebrow">资金来源说明</span><h3>来自退出成员的违约保证金</h3><p>该悬赏奖励来自退出成员的违约保证金，不是由原团队成员额外支付。</p><div><span>{sourceMember?.name ?? '退出成员'} 保证金</span><strong>{sourceMember?.deposit ?? project?.rescuePool ?? 0} MON</strong></div><div><span>本悬赏预留</span><strong>{bounty.reward} MON</strong></div></section>
           <section className="panel publisher-card"><span>发布者</span><div><span className="member-avatar">C</span><div><strong>{bounty.publisherName}</strong><small>{shortenAddress(bounty.publisherAddress)}</small></div></div></section>
         </aside>
       </div>

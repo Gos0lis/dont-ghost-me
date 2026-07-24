@@ -13,6 +13,7 @@ import { ProjectsPage } from './pages/ProjectsPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { SettlementSuccessPage } from './pages/SettlementSuccessPage'
 import { SubmitWorkPage } from './pages/SubmitWorkPage'
+import { TravelScenarioPage } from './pages/TravelScenarioPage'
 import { useAppStore } from './store/useAppStore'
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/create" element={<CreateProjectPage />} />
+          <Route path="/travel" element={<TravelScenarioPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/project/:projectId" element={<ProjectDetailPage />} />
           <Route path="/project/:projectId/create-bounty" element={<CreateBountyPage />} />

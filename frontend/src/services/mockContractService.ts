@@ -11,7 +11,7 @@ import type {
 } from '../contracts/types'
 import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
 
-const STORAGE_KEY = 'dont-ghost-me:mock-chain:v4'
+const STORAGE_KEY = 'dont-ghost-me:mock-chain:v5'
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -31,7 +31,7 @@ function readState(): MockChainState {
   }
   try {
     const parsed = JSON.parse(raw) as MockChainState
-    if (parsed.version !== 4) throw new Error('outdated mock state')
+    if (parsed.version !== 5) throw new Error('outdated mock state')
     return parsed
   } catch {
     const initial = createInitialChainState()
@@ -211,9 +211,10 @@ export const mockContractService: ContractService = {
       const member = project?.members.find((item) => item.id === memberId)
       if (!project || !member) throw new Error('成员或项目不存在')
       if (member.status === 'quit') throw new Error('该成员已经退出')
+      const unfinishedTask = member.task
       member.status = 'quit'
       member.depositLocked = false
-      member.task = '无人负责：完成核心合约逻辑与测试'
+      member.task = `无人负责：${unfinishedTask}`
       project.lockedDeposit -= member.deposit
       project.rescuePool += member.deposit
       project.status = 'rescue_needed'
@@ -237,12 +238,13 @@ export const mockContractService: ContractService = {
       if (!project) throw new Error('项目不存在')
       if (project.rescuePool - project.reservedBounty < input.reward) throw new Error('救场池可用余额不足')
       const existing = state.bounties.find((item) => item.id === DEMO_BOUNTY_ID)
+      const sourceMember = project.members.find((item) => item.id === input.sourceMemberId)
       const bounty: Bounty = {
         id: existing ? `bounty-${Date.now()}` : DEMO_BOUNTY_ID,
         ...input,
         publisherName: account.name,
         publisherAddress: account.address,
-        sourceNote: '奖励来自 Yunn 的违约保证金',
+        sourceNote: `奖励来自 ${sourceMember?.name ?? '退出成员'} 的违约保证金`,
         status: 'open',
       }
       state.bounties.unshift(bounty)
@@ -322,7 +324,7 @@ export const mockContractService: ContractService = {
       project.status = 'active_again'
       project.progress = 76
       const rescuedMember = project.members.find((item) => item.id === bounty.sourceMemberId)
-      if (rescuedMember) rescuedMember.task = '已由 Builder 07 完成智能合约 MVP'
+      if (rescuedMember) rescuedMember.task = `已由 ${rescuer.name} 完成：${bounty.title}`
       project.timeline.push(
         timeline(
           'payment',

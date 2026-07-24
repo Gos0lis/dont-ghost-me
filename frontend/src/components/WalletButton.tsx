@@ -1,7 +1,8 @@
-import { Check, ChevronDown, Copy, LogOut, WalletCards, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, LogOut, UserRoundCog, WalletCards, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { shortenAddress } from '../utils/format'
+import { roleLabel } from '../utils/format'
 import { PrimaryButton } from './ui/Buttons'
 
 const connectors = ['MetaMask', 'OKX Wallet', 'Phantom'] as const
@@ -12,6 +13,8 @@ export function WalletButton() {
   const wallet = useAppStore((state) => state.wallet)
   const connect = useAppStore((state) => state.connectWallet)
   const disconnect = useAppStore((state) => state.disconnectWallet)
+  const accounts = useAppStore((state) => state.accounts)
+  const switchAccount = useAppStore((state) => state.switchAccount)
   const pending = useAppStore((state) => state.pendingMethod === 'connectWallet')
 
   if (!wallet.isConnected || !wallet.account) {
@@ -56,6 +59,20 @@ export function WalletButton() {
       {open && (
         <div className="wallet-menu">
           <div><span>已连接账户</span><strong>{wallet.account.name}</strong></div>
+          <section className="wallet-account-switcher">
+            <span><UserRoundCog size={14} />切换演示身份</span>
+            {accounts.map((account) => (
+              <button
+                className={account.id === wallet.account?.id ? 'active' : ''}
+                key={account.id}
+                onClick={() => void switchAccount(account.id).then(() => setOpen(false))}
+              >
+                <span className="wallet-avatar">{account.avatar}</span>
+                <span><strong>{account.name}</strong><small>{roleLabel[account.role]}</small></span>
+                {account.id === wallet.account?.id && <Check size={15} />}
+              </button>
+            ))}
+          </section>
           <button onClick={() => {
             void navigator.clipboard.writeText(wallet.account!.address)
             setCopied(true)

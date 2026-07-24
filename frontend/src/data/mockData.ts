@@ -244,7 +244,7 @@ const completedGameProject: Project = {
       name: 'Kai',
       address: '0xF12A438B85D09C71',
       role: '辅助位',
-      task: '已由 PixelFox 补位并完成阵容交接',
+      task: '已由 Yunn 补位并完成阵容交接',
       taskDeadline: '2026-07-18',
       deposit: 50,
       depositLocked: false,
@@ -320,7 +320,7 @@ const completedGameProject: Project = {
     {
       id: 'game-claimed',
       type: 'bounty',
-      title: 'PixelFox 接下救场任务',
+      title: 'Yunn 接下救场任务',
       description: '外部玩家确认补位，并开始与战队进行语音磨合',
       timestamp: '2026-07-17T15:05:00.000Z',
       txHash: '0x55a1b2c3d4e5f601234567890abcdef1234567890abcdef1234567890abc005',
@@ -337,7 +337,7 @@ const completedGameProject: Project = {
       id: 'game-paid',
       type: 'payment',
       title: '50 MON 奖励全部支付',
-      description: '两项成果通过验收，奖励已支付给 PixelFox',
+      description: '两项成果通过验收，奖励已支付给 Yunn',
       timestamp: '2026-07-18T11:02:00.000Z',
       txHash: '0x77a1b2c3d4e5f601234567890abcdef1234567890abcdef1234567890abc007',
     },
@@ -369,9 +369,9 @@ const completedGameBounties: Bounty[] = [
     sourceMemberId: 'kai',
     sourceNote: '奖励来自 Kai 的违约保证金',
     status: 'paid',
-    rescuerId: 'pixel-fox',
-    rescuerName: 'PixelFox',
-    rescuerAddress: '0x91FA52C1738B4E60',
+    rescuerId: 'yunn',
+    rescuerName: 'Yunn',
+    rescuerAddress: demoAccounts[1].address,
     paidTxHash: '0x77a1b2c3d4e5f601234567890abcdef1234567890abcdef1234567890abc007',
   },
   {
@@ -390,9 +390,9 @@ const completedGameBounties: Bounty[] = [
     sourceMemberId: 'kai',
     sourceNote: '奖励来自 Kai 的违约保证金',
     status: 'paid',
-    rescuerId: 'pixel-fox',
-    rescuerName: 'PixelFox',
-    rescuerAddress: '0x91FA52C1738B4E60',
+    rescuerId: 'yunn',
+    rescuerName: 'Yunn',
+    rescuerAddress: demoAccounts[1].address,
     paidTxHash: '0x77a1b2c3d4e5f601234567890abcdef1234567890abcdef1234567890abc007',
   },
 ]
@@ -436,7 +436,7 @@ export const showcaseBounties: Bounty[] = [
 
 export function createInitialChainState(): MockChainState {
   return {
-    version: 8,
+    version: 9,
     blockNumber: 12_345_670,
     accounts: structuredClone(demoAccounts),
     connection: { isConnected: false },

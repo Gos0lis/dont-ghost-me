@@ -34,7 +34,7 @@ const replayStates: Array<{
   { label: '五人锁定 250 MON', progress: 20, locked: 250, rescue: 0, paid: 0, status: 'active' },
   { label: 'Kai 退出，50 MON 进入救场池', progress: 35, locked: 200, rescue: 50, paid: 0, status: 'rescue_needed' },
   { label: '发布两项救场悬赏', progress: 45, locked: 200, rescue: 50, paid: 0, status: 'rescue_needed' },
-  { label: 'PixelFox 领取补位任务', progress: 60, locked: 200, rescue: 50, paid: 0, status: 'rescue_in_progress' },
+  { label: 'Yunn 领取补位任务', progress: 60, locked: 200, rescue: 50, paid: 0, status: 'rescue_in_progress' },
   { label: '替补与训练成果提交', progress: 72, locked: 200, rescue: 50, paid: 0, status: 'rescue_in_progress' },
   { label: '验收通过，支付 50 MON', progress: 90, locked: 200, rescue: 0, paid: 50, status: 'active_again' },
   { label: '完成比赛，解锁剩余保证金', progress: 100, locked: 0, rescue: 0, paid: 50, status: 'completed' },
@@ -90,7 +90,7 @@ export function GameCasePage() {
           <div className="game-hero-copy">
             <span className="game-kicker"><Gamepad2 size={16} />第三个完整应用场景 · 已完成</span>
             <div className="game-title-row"><h1>队友赛前鸽了，<br />还能准时开黑吗？</h1><StatusBadge status={snapshot.status} /></div>
-            <p>Kai 临时退出后，他的 50 MON 没有被队友瓜分，而是雇来 PixelFox 补位、完成阵容交接和赛前训练。</p>
+            <p>Kai 临时退出后，他的 50 MON 没有被队友瓜分，而是雇来 Yunn 补位、完成阵容交接和赛前训练。</p>
             <div className="game-hero-actions">
               <PrimaryButton
                 icon={playing ? <RefreshCw size={17} className="animate-spin" /> : <Play size={17} />}
@@ -110,7 +110,7 @@ export function GameCasePage() {
             <div className="game-player player-two">Y</div>
             <div className="game-player player-three">J</div>
             <div className="game-player player-four">北</div>
-            <div className={`game-player player-five ${step >= 4 ? 'rescued' : ''}`}>{step >= 4 ? 'PF' : '?'}</div>
+            <div className={`game-player player-five ${step >= 4 ? 'rescued' : ''}`}>{step >= 4 ? 'Y' : '?'}</div>
             <div className="game-result-chip"><Trophy size={17} /><span>{step === 7 ? '挑战赛顺利完成' : snapshot.label}</span></div>
           </div>
         </section>
@@ -152,7 +152,7 @@ export function GameCasePage() {
           <div className="panel game-outcome-panel">
             <div className="panel-title"><div><span className="eyebrow">最终结果</span><h2>违约资金真正解决了什么</h2></div><Trophy size={23} /></div>
             <div className="outcome-list">
-              <div className={step >= 4 ? 'done' : ''}><CheckCircle2 size={18} /><div><strong>辅助位替补到位</strong><p>PixelFox 接替 Kai，阵容恢复为五人。</p></div><b>30 MON</b></div>
+              <div className={step >= 4 ? 'done' : ''}><CheckCircle2 size={18} /><div><strong>辅助位替补到位</strong><p>Yunn 接替 Kai，阵容恢复为五人。</p></div><b>30 MON</b></div>
               <div className={step >= 5 ? 'done' : ''}><CheckCircle2 size={18} /><div><strong>完成交接与训练</strong><p>英雄池、战术和两场训练记录全部交付。</p></div><b>20 MON</b></div>
               <div className={step >= 7 ? 'done' : ''}><Trophy size={18} /><div><strong>战队完成挑战赛</strong><p>其余成员保证金解锁，项目正式完成。</p></div><b>100%</b></div>
             </div>

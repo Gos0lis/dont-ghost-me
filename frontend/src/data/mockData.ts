@@ -153,8 +153,8 @@ const travelProject: Project = {
       id: 'yunn',
       name: 'Yunn',
       address: demoAccounts[1].address,
-      role: '门票与同行确认',
-      task: '购买景点门票并按约定时间共同出行',
+      role: '同行确认与路线',
+      task: '确认同行安排并协助规划每日路线',
       taskDeadline: '2026-08-06',
       deposit: 100,
       depositLocked: true,
@@ -164,8 +164,8 @@ const travelProject: Project = {
       id: 'yoyo',
       name: 'Yoyo',
       address: '0x492817354A7D3E22',
-      role: '酒店预订',
-      task: '确认酒店订单、房型和入住信息',
+      role: '酒店与门票预订',
+      task: '确认酒店订单、景点门票和入住信息',
       taskDeadline: '2026-08-05',
       deposit: 100,
       depositLocked: true,
@@ -436,7 +436,7 @@ export const showcaseBounties: Bounty[] = [
 
 export function createInitialChainState(): MockChainState {
   return {
-    version: 7,
+    version: 8,
     blockNumber: 12_345_670,
     accounts: structuredClone(demoAccounts),
     connection: { isConnected: false },

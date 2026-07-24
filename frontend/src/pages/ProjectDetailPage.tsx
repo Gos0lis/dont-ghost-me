@@ -21,7 +21,7 @@ import { Timeline } from '../components/Timeline'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { PrimaryButton, SecondaryButton } from '../components/ui/Buttons'
 import { StatusBadge } from '../components/ui/StatusBadge'
-import { DEMO_PROJECT_ID } from '../data/mockData'
+import { DEMO_PROJECT_ID, TRAVEL_PROJECT_ID } from '../data/mockData'
 import { useAppStore } from '../store/useAppStore'
 import { formatDate } from '../utils/format'
 
@@ -42,11 +42,11 @@ export function ProjectDetailPage() {
   const project = projects.find((item) => item.id === projectId)
 
   if (!project) return <div className="page-shell"><p>项目不存在。</p></div>
-  const yunn = project.members.find((member) => member.id === 'yunn')
-  const quitMember = project.members.find((member) => member.status === 'quit') ?? yunn
+  const demoQuitMember = project.members.find((member) => member.id === (project.id === TRAVEL_PROJECT_ID ? 'yoyo' : 'yunn'))
+  const quitMember = project.members.find((member) => member.status === 'quit') ?? demoQuitMember
   const projectBounties = bounties.filter((bounty) => bounty.projectId === project.id)
   const isInitiator = wallet.account?.role === 'initiator'
-  const canQuitYunn = isInitiator || wallet.account?.id === 'yunn'
+  const canQuitMember = isInitiator || wallet.account?.id === demoQuitMember?.id
   const needsRescue = project.status === 'rescue_needed'
   const canAdvance = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress < 80
   const canComplete = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress >= 80
@@ -62,10 +62,10 @@ export function ProjectDetailPage() {
 
   const projectActions = (
     <>
-      {canQuitYunn && yunn?.status !== 'quit' && (
+      {canQuitMember && demoQuitMember?.status !== 'quit' && (
         <SecondaryButton icon={<FileWarning size={17} />} onClick={() => {
           if (ensureWallet()) setQuitOpen(true)
-        }}>{isInitiator ? '模拟 Yunn 鸽掉' : '主动退出项目'}</SecondaryButton>
+        }}>{isInitiator ? `模拟 ${demoQuitMember?.name} 鸽掉` : '主动退出项目'}</SecondaryButton>
       )}
       {needsRescue && isInitiator && (
         <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>发布救场悬赏</PrimaryButton>
@@ -161,12 +161,12 @@ export function ProjectDetailPage() {
         open={quitOpen}
         danger
         loading={pending === 'quitProject'}
-        title="确认将 Yunn 标记为退出？"
-        description="其 100 MON 保证金将进入救场悬赏池，用于修复留下的智能合约任务缺口。该操作会生成模拟交易回执。"
+        title={`确认将 ${demoQuitMember?.name ?? '成员'} 标记为退出？`}
+        description={`其 ${demoQuitMember?.deposit ?? 0} MON 保证金将进入救场悬赏池，用于修复留下的任务缺口。该操作会生成模拟交易回执。`}
         confirmLabel="确认退出并转入救场池"
-        details={<><span>操作</span><strong>quitProject(projectId, "yunn")</strong><span>预计到账</span><strong>100 MON → 救场池</strong></>}
+        details={<><span>操作</span><strong>quitProject(projectId, "{demoQuitMember?.id}")</strong><span>预计到账</span><strong>{demoQuitMember?.deposit ?? 0} MON → 救场池</strong></>}
         onClose={() => setQuitOpen(false)}
-        onConfirm={() => void quitProject(project.id, 'yunn').then(() => setQuitOpen(false)).catch(() => undefined)}
+        onConfirm={() => demoQuitMember && void quitProject(project.id, demoQuitMember.id).then(() => setQuitOpen(false)).catch(() => undefined)}
       />
       <ConfirmDialog
         open={milestoneOpen}

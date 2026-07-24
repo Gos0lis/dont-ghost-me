@@ -39,7 +39,7 @@ const rescueTasks = [
     icon: Ticket,
     reward: 40,
     title: '转卖闲置门票',
-    description: '将 Yunn 名下无法退订的景点门票合规转让，减少团队损失。',
+    description: '将 Yoyo 名下无法退订的景点门票合规转让，减少团队损失。',
     skills: ['票务', '闲置交易'],
     deliverables: ['买家付款凭证', '门票转让记录'],
     acceptanceCriteria: ['门票成功转让', '款项与买家信息可核验'],
@@ -76,8 +76,8 @@ export function TravelScenarioPage() {
     () => bounties.filter((item) => item.projectId === TRAVEL_PROJECT_ID),
     [bounties],
   )
-  const yunn = project?.members.find((member) => member.id === 'yunn')
-  const hasQuit = yunn?.status === 'quit'
+  const yoyo = project?.members.find((member) => member.id === 'yoyo')
+  const hasQuit = yoyo?.status === 'quit'
   const allPublished = travelBounties.length >= rescueTasks.length
   const allResolved = allPublished && travelBounties.every((bounty) => bounty.status === 'paid')
   const isCompleted = project?.status === 'completed'
@@ -112,7 +112,7 @@ export function TravelScenarioPage() {
           deadline: '2026-08-10T12:00:00.000Z',
           reward: task.reward,
           allowMultiple: false,
-          sourceMemberId: 'yunn',
+          sourceMemberId: 'yoyo',
         }
         await createBounty(input)
       }
@@ -142,7 +142,7 @@ export function TravelScenarioPage() {
             <div className="travel-hero-actions">
               {!hasQuit ? (
                 <PrimaryButton icon={<Plane size={17} />} onClick={() => requireCaro() && setQuitOpen(true)}>
-                  模拟 Yunn 临时退出
+                  模拟 Yoyo 临时退出
                 </PrimaryButton>
               ) : !allPublished ? (
                 <PrimaryButton icon={<CircleDollarSign size={17} />} onClick={() => requireCaro() && setPublishOpen(true)}>
@@ -174,7 +174,7 @@ export function TravelScenarioPage() {
 
         <section className="travel-story">
           <div className="travel-step done"><span>01</span><LockKeyhole size={20} /><div><strong>五人先承诺</strong><p>每人锁定 100 MON，并认领旅行任务。</p></div></div>
-          <div className={`travel-step ${hasQuit ? 'danger' : ''}`}><span>02</span><Plane size={20} /><div><strong>Yunn 临时退出</strong><p>{hasQuit ? '100 MON 已进入补救悬赏池。' : '点击上方按钮模拟链上退出交易。'}</p></div></div>
+          <div className={`travel-step ${hasQuit ? 'danger' : ''}`}><span>02</span><Plane size={20} /><div><strong>Yoyo 临时退出</strong><p>{hasQuit ? '100 MON 已进入补救悬赏池。' : '点击上方按钮模拟链上退出交易。'}</p></div></div>
           <div className={`travel-step ${allPublished ? 'done' : ''}`}><span>03</span><Banknote size={20} /><div><strong>谁解决谁拿钱</strong><p>{allPublished ? '三个补救悬赏已在大厅公开发布。' : '将资金精确奖励给完成补救的人。'}</p></div></div>
         </section>
 
@@ -225,19 +225,19 @@ export function TravelScenarioPage() {
 
       <ConfirmDialog
         open={quitOpen}
-        title="确认 Yunn 临时退出旅行？"
-        description="交易成功后，Yunn 锁定的 100 MON 不会平分给朋友，而会进入旅行补救悬赏池。"
+        title="确认 Yoyo 临时退出旅行？"
+        description="交易成功后，Yoyo 锁定的 100 MON 不会平分给朋友，而会进入旅行补救悬赏池。"
         confirmLabel="确认退出并转入补救池"
         danger
         loading={pendingMethod === 'quitProject'}
-        details={<><span>合约方法</span><strong>quitProject("five-friends-trip", "yunn")</strong><span>转入补救池</span><strong>100 MON</strong></>}
+        details={<><span>合约方法</span><strong>quitProject("five-friends-trip", "yoyo")</strong><span>转入补救池</span><strong>100 MON</strong></>}
         onClose={() => setQuitOpen(false)}
-        onConfirm={() => void quitProject(TRAVEL_PROJECT_ID, 'yunn').then(() => setQuitOpen(false)).catch(() => undefined)}
+        onConfirm={() => void quitProject(TRAVEL_PROJECT_ID, 'yoyo').then(() => setQuitOpen(false)).catch(() => undefined)}
       />
       <ConfirmDialog
         open={publishOpen}
         title="发布三项旅行补救悬赏？"
-        description="系统将依次执行三笔模拟链上交易，把 Yunn 的 100 MON 分配为 40、40、20 MON 三个可领取任务。"
+        description="系统将依次执行三笔模拟链上交易，把 Yoyo 的 100 MON 分配为 40、40、20 MON 三个可领取任务。"
         confirmLabel="确认发布 40 + 40 + 20 MON"
         loading={isPublishing}
         details={<><span>合约方法</span><strong>createBounty() × 3</strong><span>奖励总额</span><strong>100 MON</strong></>}

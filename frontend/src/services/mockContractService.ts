@@ -11,7 +11,7 @@ import type {
 } from '../contracts/types'
 import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
 
-const STORAGE_KEY = 'dont-ghost-me:mock-chain:v7'
+const STORAGE_KEY = 'dont-ghost-me:mock-chain:v8'
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -31,7 +31,7 @@ function readState(): MockChainState {
   }
   try {
     const parsed = JSON.parse(raw) as MockChainState
-    if (parsed.version !== 7) throw new Error('outdated mock state')
+    if (parsed.version !== 8) throw new Error('outdated mock state')
     return parsed
   } catch {
     const initial = createInitialChainState()

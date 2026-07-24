@@ -4,6 +4,7 @@ import {
   Banknote,
   CalendarDays,
   CircleDollarSign,
+  CheckCircle2,
   Clock3,
   FileWarning,
   ShieldCheck,
@@ -25,20 +26,38 @@ export function ProjectDetailPage() {
   const { projectId = 'monad-hackathon' } = useParams()
   const navigate = useNavigate()
   const [quitOpen, setQuitOpen] = useState(false)
+  const [milestoneOpen, setMilestoneOpen] = useState(false)
+  const [completeOpen, setCompleteOpen] = useState(false)
   const projects = useAppStore((state) => state.projects)
   const bounties = useAppStore((state) => state.bounties)
   const wallet = useAppStore((state) => state.wallet)
   const pending = useAppStore((state) => state.pendingMethod)
   const quitProject = useAppStore((state) => state.quitProject)
+  const advanceProject = useAppStore((state) => state.advanceProject)
+  const completeProject = useAppStore((state) => state.completeProject)
   const notify = useAppStore((state) => state.notify)
   const project = projects.find((item) => item.id === projectId)
 
   if (!project) return <div className="page-shell"><p>项目不存在。</p></div>
   const yunn = project.members.find((member) => member.id === 'yunn')
-  const projectBounties = bounties.filter((bounty) => bounty.projectId === project.id && bounty.id === 'smart-contract-mvp')
+  const quitMember = project.members.find((member) => member.status === 'quit') ?? yunn
+  const projectBounties = bounties.filter((bounty) => bounty.projectId === project.id)
   const isInitiator = wallet.account?.role === 'initiator'
   const canQuitYunn = isInitiator || wallet.account?.id === 'yunn'
   const needsRescue = project.status === 'rescue_needed'
+  const canAdvance = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress < 80
+  const canComplete = isInitiator && ['active', 'active_again'].includes(project.status) && project.progress >= 80
+  const nextStep = project.status === 'completed'
+    ? '流程已完成：查看最终时间线和保证金结算'
+    : needsRescue
+      ? '下一步：Caro 发布救场悬赏'
+      : project.status === 'rescue_in_progress'
+        ? '下一步：Builder 07 提交成果，再切回 Caro 验收'
+        : project.status === 'active_again'
+          ? '下一步：Caro 确认最终里程碑并完成项目结算'
+          : project.progress >= 80
+            ? '下一步：Caro 完成项目并解锁保证金'
+            : '下一步：完成团队任务，或模拟 Yunn 中途退出'
 
   const ensureWallet = () => {
     if (!wallet.isConnected) {
@@ -71,13 +90,24 @@ export function ProjectDetailPage() {
           {needsRescue && isInitiator && (
             <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>发布救场悬赏</PrimaryButton>
           )}
+          {canAdvance && (
+            <PrimaryButton onClick={() => ensureWallet() && setMilestoneOpen(true)}>确认当前里程碑</PrimaryButton>
+          )}
+          {canComplete && (
+            <PrimaryButton icon={<CheckCircle2 size={17} />} onClick={() => ensureWallet() && setCompleteOpen(true)}>完成项目并结算</PrimaryButton>
+          )}
         </div>
+      </div>
+
+      <div className={`demo-next-step ${project.status === 'completed' ? 'complete' : ''}`}>
+        <span>现场演示指引</span><strong>{nextStep}</strong>
+        <small>当前身份：{wallet.account?.name ?? '未连接钱包'}</small>
       </div>
 
       {['rescue_needed', 'rescue_in_progress'].includes(project.status) && (
         <div className="warning-banner">
           <AlertTriangle size={23} />
-          <div><strong>{project.status === 'rescue_needed' ? '项目处于等待救场状态' : '救场任务正在进行'}</strong><p>Yunn 已退出，其 100 MON 保证金进入救场池，用于修复智能合约任务缺口。</p></div>
+          <div><strong>{project.status === 'rescue_needed' ? '项目处于等待救场状态' : '救场任务正在进行'}</strong><p>{quitMember?.name ?? '成员'} 已退出，其 {quitMember?.deposit ?? project.rescuePool} MON 保证金进入救场池，用于修复遗留任务缺口。</p></div>
           {needsRescue && isInitiator && <PrimaryButton onClick={() => navigate(`/project/${project.id}/create-bounty`)}>立即发布悬赏</PrimaryButton>}
         </div>
       )}
@@ -120,6 +150,26 @@ export function ProjectDetailPage() {
         details={<><span>操作</span><strong>quitProject(projectId, "yunn")</strong><span>预计到账</span><strong>100 MON → 救场池</strong></>}
         onClose={() => setQuitOpen(false)}
         onConfirm={() => void quitProject(project.id, 'yunn').then(() => setQuitOpen(false)).catch(() => undefined)}
+      />
+      <ConfirmDialog
+        open={milestoneOpen}
+        loading={pending === 'advanceProject'}
+        title="确认当前项目里程碑？"
+        description="确认后将生成模拟链上交易，更新整体进度和项目时间线。"
+        confirmLabel="确认里程碑并推进进度"
+        details={<><span>操作</span><strong>advanceProject(projectId)</strong><span>预计进度</span><strong>{project.status === 'active_again' ? '90%' : '80%'}</strong></>}
+        onClose={() => setMilestoneOpen(false)}
+        onConfirm={() => void advanceProject(project.id).then(() => setMilestoneOpen(false)).catch(() => undefined)}
+      />
+      <ConfirmDialog
+        open={completeOpen}
+        loading={pending === 'completeProject'}
+        title="完成项目并结算保证金？"
+        description="项目将更新为已完成，所有仍在履约成员的锁定保证金会被解锁，并生成最终交易回执。"
+        confirmLabel="完成项目并结算"
+        details={<><span>操作</span><strong>completeProject(projectId)</strong><span>解锁保证金</span><strong>{project.lockedDeposit} MON</strong></>}
+        onClose={() => setCompleteOpen(false)}
+        onConfirm={() => void completeProject(project.id).then(() => setCompleteOpen(false)).catch(() => undefined)}
       />
     </div>
   )

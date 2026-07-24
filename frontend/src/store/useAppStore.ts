@@ -37,6 +37,9 @@ interface AppStore {
   confirmParticipation: (projectId: string, memberId: string) => Promise<TransactionReceipt>
   lockDeposit: (projectId: string, memberId: string) => Promise<TransactionReceipt>
   quitProject: (projectId: string, memberId: string) => Promise<TransactionReceipt>
+  advanceProject: (projectId: string) => Promise<TransactionReceipt>
+  completeProject: (projectId: string) => Promise<TransactionReceipt>
+  batchResolveBounties: (projectId: string) => Promise<TransactionReceipt>
   createBounty: (input: CreateBountyInput) => Promise<TransactionReceipt>
   claimBounty: (bountyId: string) => Promise<TransactionReceipt>
   submitWork: (
@@ -55,6 +58,9 @@ const methodLabels: Record<string, string> = {
   confirmParticipation: '确认参与',
   lockDeposit: '锁定保证金',
   quitProject: '退出项目',
+  advanceProject: '确认项目里程碑',
+  completeProject: '完成项目并结算',
+  batchResolveBounties: '批量完成补救任务',
   createBounty: '发布救场悬赏',
   claimBounty: '领取救场任务',
   submitWork: '提交救场成果',
@@ -131,6 +137,12 @@ export const useAppStore = create<AppStore>((set, get) => {
       run('lockDeposit', () => contractService.lockDeposit(projectId, memberId)),
     quitProject: (projectId, memberId) =>
       run('quitProject', () => contractService.quitProject(projectId, memberId)),
+    advanceProject: (projectId) =>
+      run('advanceProject', () => contractService.advanceProject(projectId)),
+    completeProject: (projectId) =>
+      run('completeProject', () => contractService.completeProject(projectId)),
+    batchResolveBounties: (projectId) =>
+      run('batchResolveBounties', () => contractService.batchResolveBounties(projectId)),
     createBounty: (input) => run('createBounty', () => contractService.createBounty(input)),
     claimBounty: (bountyId) => run('claimBounty', () => contractService.claimBounty(bountyId)),
     submitWork: (bountyId, submission) =>

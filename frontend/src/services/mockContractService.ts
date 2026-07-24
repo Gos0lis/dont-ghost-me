@@ -11,7 +11,7 @@ import type {
 } from '../contracts/types'
 import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
 
-const STORAGE_KEY = 'dont-ghost-me:mock-chain:v5'
+const STORAGE_KEY = 'dont-ghost-me:mock-chain:v7'
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -31,7 +31,7 @@ function readState(): MockChainState {
   }
   try {
     const parsed = JSON.parse(raw) as MockChainState
-    if (parsed.version !== 5) throw new Error('outdated mock state')
+    if (parsed.version !== 7) throw new Error('outdated mock state')
     return parsed
   } catch {
     const initial = createInitialChainState()
@@ -228,6 +228,86 @@ export const mockContractService: ContractService = {
         ),
       )
       return `${member.name} 已退出，${member.deposit} MON 已进入救场池`
+    })
+  },
+
+  async advanceProject(projectId) {
+    return writeTransaction('advanceProject', (state, hash) => {
+      const account = currentAccount(state)
+      if (account.role !== 'initiator') throw new Error('只有项目发起人可以确认里程碑')
+      const project = state.projects.find((item) => item.id === projectId)
+      if (!project) throw new Error('项目不存在')
+      if (!['active', 'active_again'].includes(project.status)) throw new Error('当前项目状态不可推进')
+      if (project.progress >= 90) throw new Error('所有里程碑均已确认，请完成项目结算')
+      project.progress = project.status === 'active_again' ? 90 : Math.max(80, project.progress + 20)
+      project.timeline.push(
+        timeline('submission', '项目里程碑已确认', `当前整体进度更新为 ${project.progress}%`, hash),
+      )
+      return `里程碑确认成功，项目进度更新为 ${project.progress}%`
+    })
+  },
+
+  async completeProject(projectId) {
+    return writeTransaction('completeProject', (state, hash) => {
+      const account = currentAccount(state)
+      if (account.role !== 'initiator') throw new Error('只有项目发起人可以完成项目结算')
+      const project = state.projects.find((item) => item.id === projectId)
+      if (!project) throw new Error('项目不存在')
+      if (!['active', 'active_again'].includes(project.status)) throw new Error('当前项目状态不可结算')
+      if (project.progress < 80) throw new Error('请先确认当前项目里程碑')
+      if (project.reservedBounty > 0) throw new Error('仍有未结算的救场悬赏')
+      const unlocked = project.lockedDeposit
+      project.lockedDeposit = 0
+      project.rescuePool = 0
+      project.progress = 100
+      project.status = 'completed'
+      project.members.forEach((member) => {
+        if (member.status !== 'quit') {
+          member.status = 'completed'
+          member.depositLocked = false
+        }
+      })
+      project.timeline.push(
+        timeline('payment', '项目完成并结算', `项目交付完成，${unlocked} MON 成员保证金已解锁`, hash),
+      )
+      return `项目已完成，${unlocked} MON 保证金已解锁`
+    })
+  },
+
+  async batchResolveBounties(projectId) {
+    return writeTransaction('batchResolveBounties', (state, hash) => {
+      const account = currentAccount(state)
+      if (account.role !== 'initiator') throw new Error('只有项目发起人可以发起批量结算')
+      const project = state.projects.find((item) => item.id === projectId)
+      if (!project) throw new Error('项目不存在')
+      const pendingBounties = state.bounties.filter(
+        (bounty) => bounty.projectId === projectId && bounty.status !== 'paid',
+      )
+      if (pendingBounties.length === 0) throw new Error('没有待完成的救场悬赏')
+      const totalReward = pendingBounties.reduce((sum, bounty) => sum + bounty.reward, 0)
+      if (totalReward > project.rescuePool) throw new Error('救场池余额不足')
+      pendingBounties.forEach((bounty) => {
+        bounty.status = 'paid'
+        bounty.rescuerId = 'travel-helper-team'
+        bounty.rescuerName = '旅行救场小队'
+        bounty.rescuerAddress = '0x7A8E10B25C394FD2'
+        bounty.paidTxHash = hash
+      })
+      project.rescuePool -= totalReward
+      project.reservedBounty = Math.max(0, project.reservedBounty - totalReward)
+      project.status = 'active_again'
+      project.progress = 90
+      const rescuedMember = project.members.find((member) => member.status === 'quit')
+      if (rescuedMember) rescuedMember.task = '已由旅行救场小队完成三项补救任务'
+      project.timeline.push(
+        timeline(
+          'payment',
+          `${pendingBounties.length} 项补救任务批量验收`,
+          `${totalReward} MON 已支付给旅行救场小队，行程恢复进行`,
+          hash,
+        ),
+      )
+      return `${pendingBounties.length} 项补救已完成，${totalReward} MON 奖励支付成功`
     })
   },
 

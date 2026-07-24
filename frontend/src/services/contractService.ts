@@ -23,6 +23,9 @@ export interface ContractService {
   confirmParticipation(projectId: string, memberId: string): Promise<TransactionResponse>
   lockDeposit(projectId: string, memberId: string): Promise<TransactionResponse>
   quitProject(projectId: string, memberId: string): Promise<TransactionResponse>
+  advanceProject(projectId: string): Promise<TransactionResponse>
+  completeProject(projectId: string): Promise<TransactionResponse>
+  batchResolveBounties(projectId: string): Promise<TransactionResponse>
   createBounty(input: CreateBountyInput): Promise<TransactionResponse>
   claimBounty(bountyId: string): Promise<TransactionResponse>
   submitWork(bountyId: string, submission: Omit<WorkSubmission, 'submittedAt'>): Promise<TransactionResponse>

@@ -2,7 +2,15 @@
 
 > 让成员退出后的违约保证金，变成奖励救场者的悬赏池。
 
-**在线 Demo**：<https://dont-ghost-ie2tu7thg-clori001s-projects.vercel.app>
+[![CI](https://github.com/Gos0lis/dont-ghost-me/actions/workflows/test.yml/badge.svg)](https://github.com/Gos0lis/dont-ghost-me/actions/workflows/test.yml)
+[![Solidity](https://img.shields.io/badge/Solidity-%5E0.8.20-363636?logo=solidity)](./src/DontGhostMe.sol)
+[![Foundry](https://img.shields.io/badge/Built%20with-Foundry-FFB000)](https://book.getfoundry.sh/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+
+**在线 Demo**：<https://dont-ghost-me.vercel.app>
+
+> [!IMPORTANT]
+> 当前版本是可交互 MVP：前端使用模拟钱包、模拟交易和 `localStorage` 展示完整业务流程，尚未连接已部署的 Monad 合约。请勿向 Demo 发送真实资产。
 
 ---
 
@@ -33,6 +41,36 @@
 
 该机制既可用于黑客松任务补位，也可用于旅行中的找替补、转卖门票和修改行程。
 
+## 当前进度
+
+### 已完成
+
+- [x] 项目创建、成员加入、保证金锁定与退出机制
+- [x] 救场悬赏的发布、领取、提交、打回、拒绝、验收与支付
+- [x] 成员驱逐提案、保证金、投票、执行和退款机制
+- [x] 项目完成/取消后的成员保证金与救场池结算
+- [x] Solidity 接口、核心事件、错误定义及安全防护
+- [x] Foundry 功能与安全测试（当前共 52 项，包含 2 项脚手架示例测试）
+- [x] 黑客松、朋友旅行、游戏组队三套前端演示流程
+- [x] GitHub Actions 合约格式、构建与测试工作流
+
+### 待完成
+
+- [ ] 编写 `DontGhostMe` 正式部署脚本并移除 Counter 脚手架
+- [ ] 配置 Monad RPC、Chain ID、环境变量模板及合约验证
+- [ ] 将前端模拟服务替换为 viem/wagmi 真实合约服务
+- [ ] 增加链上事件索引，支持项目、悬赏和驱逐提案列表查询
+- [ ] 为成果提交增加 URL、IPFS CID 或内容哈希存证
+- [ ] 补充部署地址、广播记录、安全分析和上线运维文档
+
+### 当前已知限制
+
+- 前端 `contractService` 目前绑定 `mockContractService`，状态仅保存在浏览器本地。
+- wagmi 当前配置为 Mainnet/Sepolia，尚未切换至 Monad。
+- 仓库现有部署脚本仍是 Foundry Counter 示例，不能用于部署主合约。
+- 合约按 ID 提供查询接口；列表页接入真实链时需要事件索引器或链下服务。
+- 悬赏发布和成果验收目前仅允许项目发起人操作。
+
 ---
 
 ## 团队
@@ -60,13 +98,20 @@
 
 ```
 dont-ghost-me/
+├── .github/workflows/
+│   └── test.yml              # Foundry CI
 ├── src/
 │   ├── DontGhostMe.sol       # 主合约：保证金、悬赏、驱逐、结算逻辑
 │   └── IDontGhostMe.sol      # ABI 接口
 ├── test/
 │   ├── DontGhostMe.t.sol            # 功能测试
 │   └── DontGhostMeSecurity.t.sol    # 安全测试（重入等）
-├── frontend/                # React + Vite + TypeScript 前端 Demo
+├── script/
+│   └── Counter.s.sol         # Foundry 示例，待替换为主合约部署脚本
+├── frontend/                 # React + Vite + TypeScript 前端 Demo
+│   └── src/services/
+│       ├── contractService.ts        # 合约服务抽象
+│       └── mockContractService.ts    # 当前模拟实现
 ├── lib/forge-std/            # Foundry 标准库
 └── foundry.toml              # Foundry 配置
 ```
@@ -80,7 +125,7 @@ dont-ghost-me/
 ### 核心机制
 
 - **项目（Project）**：发起人创建项目并设定保证金金额，成员加入时缴纳保证金。
-- **救场悬赏（Bounty）**：项目成员可发布悬赏，描述任务并设定奖励；救场者领取、提交成果，经成员验收后获得奖励。
+- **救场悬赏（Bounty）**：项目发起人可发布悬赏，描述任务并设定奖励；救场者领取、提交成果，经发起人验收后获得奖励。
 - **驱逐提案（ExpulsionProposal）**：成员可发起驱逐提案，需缴纳提案保证金（bond），投票通过后目标成员被驱逐，其保证金进入救场池；提案失败则部分保证金被罚没。
 - **救场池结算（RescuePoolSettlement）**：项目完成或取消后，剩余保证金与救场池余额按规则分配给合格成员，未领取部分由发起人回收。
 
@@ -103,10 +148,14 @@ submitWork(uint256 bountyId)
 requestRevision(uint256 bountyId, string reason)
 approveWork(uint256 bountyId) / rejectWork(uint256 bountyId, string reason)
 cancelBounty(uint256 bountyId)
+cancelClaim(uint256 bountyId)
+cancelSubmittedBounty(uint256 bountyId, string reason)
+cancelStaleBounty(uint256 bountyId)
 
 proposeExpulsion(uint256 projectId, address target) payable
 voteExpulsion(uint256 proposalId, bool support)
 executeExpulsion(uint256 proposalId)
+withdrawExpulsionBondRefund()
 
 finishProject(uint256 projectId) / cancelProject(uint256 projectId)
 withdrawRemainingRescuePool(uint256 projectId)
@@ -118,6 +167,10 @@ sweepUnclaimedRescuePool(uint256 projectId)
 ### 构建 / 测试
 
 ```shell
+# 克隆仓库（包含 forge-std 子模块）
+git clone --recurse-submodules https://github.com/Gos0lis/dont-ghost-me.git
+cd dont-ghost-me
+
 # 构建
 forge build
 
@@ -132,19 +185,25 @@ forge snapshot
 
 # 本地节点
 anvil
-
-# 部署
-forge script script/Counter.s.sol:CounterScript \
-  --rpc-url <your_rpc_url> --private-key <your_private_key>
 ```
 
 > Foundry 文档：<https://book.getfoundry.sh/>
+
+### 部署状态
+
+主合约尚未发布正式部署脚本和 Monad 部署地址。`script/Counter.s.sol` 是 Foundry 初始化模板，不代表 `DontGhostMe` 已部署。正式上链前还需要完成：
+
+1. 新增 `script/DontGhostMe.s.sol`；
+2. 配置 Monad RPC、部署账户和链参数；
+3. 部署并验证合约；
+4. 保存部署地址与广播记录；
+5. 将前端服务切换到真实 ABI 和合约地址。
 
 ---
 
 ## 前端 Demo
 
-前端基于 React + Vite + TypeScript。当前 Demo 不连接真实合约，所有关键业务操作通过统一的假合约服务执行，并使用 `localStorage` 模拟链上状态持久化。未来接入真实合约时，只需新增 `viemContractService.ts` 并替换服务绑定，页面路由与组件流程无需重新设计。
+前端基于 React、Vite 和 TypeScript。当前 Demo 不连接真实合约，所有关键业务操作通过统一的模拟合约服务执行，并使用 `localStorage` 模拟链上状态持久化。服务接口集中在 `frontend/src/services/contractService.ts`；后续可新增 `viemContractService.ts` 并替换绑定，复用现有页面流程。
 
 ### 启动
 
@@ -217,11 +276,13 @@ npm run build
 ## 技术栈
 
 - **智能合约**：Solidity ^0.8.20 / Foundry（Forge、Cast、Anvil）
-- **前端**：React + Vite + TypeScript
-- **目标链**：Monad（原生代币 MON）
+- **前端**：React / TypeScript / Vite / React Router / Zustand
+- **Web3 客户端**：wagmi / viem / TanStack Query（真实合约接入待完成）
+- **目标链**：Monad（原生代币 MON，部署待完成）
+- **持续集成**：GitHub Actions
 
 ---
 
 ## License
 
-SPDX-License-Identifier: MIT
+项目主合约使用 [MIT License](https://spdx.org/licenses/MIT.html)，SPDX 标识为 `MIT`。仓库根目录 `LICENSE` 文件待补充。

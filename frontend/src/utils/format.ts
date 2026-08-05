@@ -16,6 +16,7 @@ export const projectStatusLabel: Record<ProjectStatus, string> = {
   rescue_in_progress: '救场进行中',
   active_again: '已恢复进行',
   completed: '已完成',
+  cancelled: '已取消',
 }
 
 export const memberStatusLabel: Record<MemberStatus, string> = {
@@ -32,7 +33,9 @@ export const bountyStatusLabel: Record<BountyStatus, string> = {
   submitted: '等待验收',
   revision_required: '需要修改',
   approved: '验收通过',
+  rejected: '已拒绝',
   paid: '奖励已支付',
+  cancelled: '已取消',
 }
 
 export const roleLabel: Record<AccountRole, string> = {

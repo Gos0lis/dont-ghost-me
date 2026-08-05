@@ -191,7 +191,7 @@
 
               <div class="promise-meta">
                 <div><span>承诺成员</span><strong id="projectMemberCount">5 人</strong></div>
-                <div><span>个人保证金</span><strong id="projectDeposit">100 MON</strong></div>
+                <div><span>个人保证金</span><strong id="projectDeposit">100 <span data-native-symbol>MON</span></strong></div>
                 <div><span>当前阶段</span><strong id="projectStage">Demo 开发</strong></div>
               </div>
 
@@ -213,7 +213,7 @@
 
             <aside class="fund-pocket">
               <div class="pocket-label">RESCUE FUND</div>
-              <div class="money-amount"><strong id="fundAmount">100</strong><span>MON</span></div>
+              <div class="money-amount"><strong id="fundAmount">100</strong><span data-native-symbol>MON</span></div>
               <p id="fundDescription">退出成员的保证金<br />已进入救场池</p>
 
               <svg class="pigeon-money" viewBox="0 0 250 210" role="img" aria-label="抱着钱袋的小白鸽">
@@ -251,7 +251,7 @@
                 <strong>紧急完成智能合约 MVP</strong>
                 <em>提交代码仓库，等待团队验收</em>
               </span>
-              <span class="ticket-reward"><b>80</b> MON</span>
+              <span class="ticket-reward"><b>80</b> <span data-native-symbol>MON</span></span>
               <span class="ticket-status">待领取</span>
             </button>
 
@@ -262,7 +262,7 @@
                 <strong>整理代码交接与部署说明</strong>
                 <em>补充必要文件与运行步骤</em>
               </span>
-              <span class="ticket-reward"><b>20</b> MON</span>
+              <span class="ticket-reward"><b>20</b> <span data-native-symbol>MON</span></span>
               <span class="ticket-status">待领取</span>
             </button>
           </div>
@@ -367,7 +367,7 @@
                   </label>
                   <label class="promise-field">
                     <span>每人保证金</span>
-                    <span class="amount-input"><input id="promiseDeposit" type="number" min="0" value="100" /><b>MON</b></span>
+                    <span class="amount-input"><input id="promiseDeposit" type="number" min="1" value="100" /><b data-native-symbol>MON</b></span>
                   </label>
                 </div>
               </div>
@@ -428,7 +428,7 @@
                 <h3 id="previewTitle">Monad 黑客松作品开发</h3>
                 <dl>
                   <div><dt>完成日期</dt><dd id="previewDeadline">2026.08.09</dd></div>
-                  <div><dt>保证金</dt><dd><b id="previewDeposit">100</b> MON / 人</dd></div>
+                  <div><dt>保证金</dt><dd><b id="previewDeposit">100</b> <span data-native-symbol>MON</span> / 人</dd></div>
                   <div><dt>承诺成员</dt><dd id="previewMembers">2 人</dd></div>
                 </dl>
               </div>
@@ -513,7 +513,7 @@
 
                 <dl class="confirm-promise-meta">
                   <div><dt>承诺成员</dt><dd id="confirmMemberTotal">5 人</dd></div>
-                  <div><dt>每人保证金</dt><dd><b id="confirmPerDeposit">100</b> MON</dd></div>
+                  <div><dt>每人保证金</dt><dd><b id="confirmPerDeposit">100</b> <span data-native-symbol>MON</span></dd></div>
                   <div><dt>当前状态</dt><dd>等待成员确认</dd></div>
                 </dl>
 
@@ -560,7 +560,7 @@
                 <h4 id="currentSignerName">Caro</h4>
                 <p id="currentSignerTask">产品与前端 Demo</p>
                 <dl>
-                  <div><dt>需要锁定</dt><dd><b id="signerDeposit">100</b> MON</dd></div>
+                  <div><dt>需要锁定</dt><dd><b id="signerDeposit">100</b> <span data-native-symbol>MON</span></dd></div>
                   <div><dt>测试钱包</dt><dd>0x7C...D12</dd></div>
                 </dl>
                 <div class="signature-line"><i></i><span>在这里盖章确认</span></div>
@@ -595,8 +595,8 @@
             <div class="confirm-receipt">
               <span>LOCK RECEIPT · 001</span>
               <div><small>已确认成员</small><strong id="confirmedMemberCount">5 / 5</strong></div>
-              <div><small>每人锁定</small><strong><b id="confirmedPerDeposit">100</b> MON</strong></div>
-              <div><small>模拟锁定总额</small><strong><b id="confirmedTotalDeposit">500</b> MON</strong></div>
+              <div><small>每人锁定</small><strong><b id="confirmedPerDeposit">100</b> <span data-native-symbol>MON</span></strong></div>
+              <div><small>模拟锁定总额</small><strong><b id="confirmedTotalDeposit">500</b> <span data-native-symbol>MON</span></strong></div>
             </div>
 
             <footer class="exit-panel-actions confirm-complete-actions">
@@ -641,7 +641,7 @@
 
               <aside class="exit-deposit-pocket">
                 <span>LOCKED DEPOSIT</span>
-                <strong><b id="exitDepositAmount">100</b> MON</strong>
+                <strong><b id="exitDepositAmount">100</b> <span data-native-symbol>MON</span></strong>
                 <p>这笔保证金原本用于确认成员承诺，退出后将成为救场奖励。</p>
                 <svg viewBox="0 0 210 155" aria-hidden="true">
                   <ellipse class="exit-bird-body" cx="81" cy="91" rx="54" ry="45" />
@@ -678,7 +678,7 @@
 
               <aside class="exit-fund-envelope">
                 <span>RESCUE FUND</span>
-                <strong><b id="exitPoolAmount">100</b> MON</strong>
+                <strong><b id="exitPoolAmount">100</b> <span data-native-symbol>MON</span></strong>
                 <p>金额会按遗留任务拆成救场票，验收通过后支付给补位者。</p>
                 <div class="exit-allocation-stamp">READY<br /><b>待转入</b></div>
               </aside>
@@ -717,7 +717,7 @@
             <div class="exit-receipt">
               <span>EXIT RECEIPT · 001</span>
               <div><small>退出成员</small><strong id="exitReceiptMember">Kai</strong></div>
-              <div><small>转入救场池</small><strong><b id="exitReceiptAmount">100</b> MON</strong></div>
+              <div><small>转入救场池</small><strong><b id="exitReceiptAmount">100</b> <span data-native-symbol>MON</span></strong></div>
               <div><small>生成救场票</small><strong id="exitReceiptTickets">2 张</strong></div>
             </div>
 
@@ -780,7 +780,7 @@
 
             <aside class="rescue-reward-pocket">
               <p class="rescue-panel-kicker">RESCUE REWARD</p>
-              <div class="rescue-reward-number"><strong id="rescueReward">80</strong><span>MON</span></div>
+              <div class="rescue-reward-number"><strong id="rescueReward">80</strong><span data-native-symbol>MON</span></div>
               <p>来自退出成员的保证金<br />验收通过后发放</p>
 
               <svg class="flow-money-pigeon" viewBox="0 0 270 225" role="img" aria-label="抱着救场钱袋的小白鸽">
@@ -833,7 +833,7 @@
               <dl>
                 <div><dt>救场者</dt><dd>测试钱包 · Caro</dd></div>
                 <div><dt>任务</dt><dd id="claimedTaskName">紧急完成智能合约 MVP</dd></div>
-                <div><dt>预留奖励</dt><dd><b id="claimedReward">80</b> MON</dd></div>
+                <div><dt>预留奖励</dt><dd><b id="claimedReward">80</b> <span data-native-symbol>MON</span></dd></div>
                 <div><dt>当前状态</dt><dd>等待提交成果</dd></div>
               </dl>
               <svg class="claimed-pigeon" viewBox="0 0 180 125" aria-hidden="true">
@@ -919,7 +919,7 @@
               <span>SETTLEMENT RECEIPT · 001</span>
               <strong id="paidTaskName">紧急完成智能合约 MVP</strong>
               <div><small>救场者</small><b>测试钱包 · Caro</b></div>
-              <div><small>已发放奖励</small><b><em id="paidReward">80</em> MON</b></div>
+              <div><small>已发放奖励</small><b><em id="paidReward">80</em> <span data-native-symbol>MON</span></b></div>
               <div><small>状态</small><b>已验收 · 已结算</b></div>
             </div>
 

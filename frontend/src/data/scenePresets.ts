@@ -67,7 +67,8 @@ export const scenePresets: Record<DesignSceneKey, ScenePreset> = {
     label: '我的多人计划',
     name: '',
     deadline: '',
-    deposit: '0',
+    // Contract rejects depositAmount == 0; keep a positive default for local/mock create.
+    deposit: '50',
     members: [
       { name: 'Caro', task: '待分配任务' },
       { name: '新成员', task: '待分配任务' },

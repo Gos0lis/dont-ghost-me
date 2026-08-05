@@ -2,6 +2,7 @@ export type Address = `0x${string}`
 export type Hash = `0x${string}`
 
 export type AccountRole = 'initiator' | 'member' | 'rescuer'
+/** UI / product project status (may be derived from chain + members/bounties). */
 export type ProjectStatus =
   | 'draft'
   | 'awaiting_confirmation'
@@ -10,6 +11,9 @@ export type ProjectStatus =
   | 'rescue_in_progress'
   | 'active_again'
   | 'completed'
+  | 'cancelled'
+/** On-chain ProjectStatus enum: Active=0, Finished=1, Cancelled=2 */
+export type ChainProjectStatus = 'Active' | 'Finished' | 'Cancelled'
 export type MemberStatus = 'invited' | 'confirmed' | 'active' | 'quit' | 'completed'
 export type BountyStatus =
   | 'open'
@@ -17,7 +21,9 @@ export type BountyStatus =
   | 'submitted'
   | 'revision_required'
   | 'approved'
+  | 'rejected'
   | 'paid'
+  | 'cancelled'
 export type TransactionStatus = 'pending' | 'success' | 'failed'
 
 export interface WalletAccount {

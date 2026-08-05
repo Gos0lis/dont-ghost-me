@@ -14,11 +14,20 @@ export function DesignApp() {
     const host = hostRef.current
     if (!host) return
 
-    host.innerHTML = designBody
-    const cleanup = wireDesignToMock()
+    let cancelled = false
+    let cleanup: (() => void) | undefined
+
+    // Avoid StrictMode double-mount wiping listeners mid-init.
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      host.innerHTML = designBody
+      cleanup = wireDesignToMock()
+    }, 0)
 
     return () => {
-      cleanup()
+      cancelled = true
+      window.clearTimeout(timer)
+      cleanup?.()
       host.innerHTML = ''
       document.body.classList.remove('modal-open', 'design-busy')
     }

@@ -1,1 +1,0 @@
-export function initDesignDemo(): () => void

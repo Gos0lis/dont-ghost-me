@@ -6,7 +6,8 @@ import {
   type DesignSceneKey,
 } from '../data/scenePresets'
 import { designBackend, type DesignSnapshot } from '../services/designBackend'
-import { contractService } from '../services/contractService'
+import { contractService, isOnChainBackend } from '../services/contractService'
+import { getNativeSymbol, LOCAL_DEMO_MEMBER_LIMIT } from '../contracts/chainConfig'
 
 type ToastFn = (message: string) => void
 
@@ -25,6 +26,14 @@ function $(selector: string, root: ParentNode = document) {
   return root.querySelector(selector) as HTMLElement | null
 }
 
+function unit() {
+  return getNativeSymbol()
+}
+
+function backendLabel() {
+  return isOnChainBackend ? '本地链' : '演示数据'
+}
+
 function statusLabel(status: Bounty['status']) {
   switch (status) {
     case 'open':
@@ -38,9 +47,20 @@ function statusLabel(status: Bounty['status']) {
     case 'approved':
     case 'paid':
       return '已完成'
+    case 'rejected':
+      return '已拒绝'
+    case 'cancelled':
+      return '已取消'
     default:
       return status
   }
+}
+
+function syncCurrencyLabels() {
+  const symbol = unit()
+  document.querySelectorAll('[data-native-symbol]').forEach((node) => {
+    node.textContent = symbol
+  })
 }
 
 function timelineLabels(project: Project): [string, string, string, string] {
@@ -91,6 +111,8 @@ export function wireDesignToMock(): () => void {
     console.error('[design] required DOM nodes missing')
     return () => undefined
   }
+
+  syncCurrencyLabels()
 
   const showToast: ToastFn = (message) => {
     window.clearTimeout(toastTimer)
@@ -230,7 +252,7 @@ export function wireDesignToMock(): () => void {
             <strong>${bounty.title}</strong>
             <em>${summary}</em>
           </span>
-          <span class="ticket-reward"><b>${bounty.reward}</b> MON</span>
+          <span class="ticket-reward"><b>${bounty.reward}</b> ${unit()}</span>
           <span class="ticket-status">${statusLabel(bounty.status)}</span>
         </button>`
       })
@@ -258,7 +280,7 @@ export function wireDesignToMock(): () => void {
     setText('#projectCardTitle', project.name)
     setText('#projectSummary', project.description)
     setText('#projectMemberCount', `${project.members.length} 人`)
-    setText('#projectDeposit', `${project.members[0]?.deposit ?? 0} MON`)
+    setText('#projectDeposit', `${project.members[0]?.deposit ?? 0} ${unit()}`)
     setText('#projectStage', project.status === 'awaiting_confirmation' ? '等待确认' : project.category)
     const [t1, t2, t3, t4] = timelineLabels(project)
     setText('#timelineOne', t1)
@@ -368,6 +390,11 @@ export function wireDesignToMock(): () => void {
     updatePromisePreview()
   })
   $('#addMemberButton')?.addEventListener('click', () => {
+    const count = memberList.querySelectorAll('.member-row').length
+    if (isOnChainBackend && count >= LOCAL_DEMO_MEMBER_LIMIT) {
+      showToast(`本地链演示最多 ${LOCAL_DEMO_MEMBER_LIMIT} 名成员`)
+      return
+    }
     memberList.insertAdjacentHTML('beforeend', memberRowTemplate('新成员', '待分配任务'))
     updatePromisePreview()
   })
@@ -382,7 +409,7 @@ export function wireDesignToMock(): () => void {
   $('#promiseBackdrop')?.addEventListener('click', () => closeModal(promiseModal))
   $('#saveDraftButton')?.addEventListener('click', () => {
     updatePromisePreview()
-    showToast('草稿仅保存在当前表单 · 点寄出才会写入假后端')
+    showToast(`草稿仅保存在当前表单 · 点寄出才会写入${backendLabel()}`)
   })
   $('#makeAnotherPromise')?.addEventListener('click', () => {
     if (promiseEditor) promiseEditor.hidden = false
@@ -396,6 +423,12 @@ export function wireDesignToMock(): () => void {
         showToast('先给这份承诺写一个名字')
         return
       }
+      const depositValue = Number(depositInput?.value || 0)
+      if (!(depositValue > 0)) {
+        depositInput?.focus()
+        showToast('保证金必须大于 0')
+        return
+      }
       const rule = $('#promiseRule') as HTMLInputElement | null
       if (!rule?.checked) {
         showToast('请先确认退出与救场规则')
@@ -407,12 +440,16 @@ export function wireDesignToMock(): () => void {
         name: (row.querySelector('.member-name') as HTMLInputElement).value,
         task: (row.querySelector('.member-task') as HTMLInputElement).value,
       }))
+      if (isOnChainBackend && members.length > LOCAL_DEMO_MEMBER_LIMIT) {
+        showToast(`本地链演示最多 ${LOCAL_DEMO_MEMBER_LIMIT} 名成员`)
+        return
+      }
       const result = await run('创建承诺', () =>
         designBackend.createPromise({
           scene,
           name: projectNameInput.value,
           deadline: deadlineInput?.value ?? '',
-          deposit: Number(depositInput?.value || 0),
+          deposit: depositValue,
           members,
           customSceneLabel: customSceneName?.value,
         }),
@@ -421,7 +458,7 @@ export function wireDesignToMock(): () => void {
       updatePromisePreview()
       if (promiseEditor) promiseEditor.hidden = true
       if (promiseSuccess) promiseSuccess.hidden = false
-      showToast('承诺已写入假后端 · 可进入成员确认')
+      showToast(`承诺已写入${backendLabel()} · 可进入成员确认`)
     })()
   })
 
@@ -600,7 +637,7 @@ export function wireDesignToMock(): () => void {
           (task) => `
           <div class="exit-task-slip">
             <span><strong>${task.title}</strong><small>${task.category}</small></span>
-            <b>${task.reward} MON</b>
+            <b>${task.reward} ${unit()}</b>
           </div>`,
         )
         .join('')
@@ -660,7 +697,7 @@ export function wireDesignToMock(): () => void {
       )
       if (!result) return
       setExitStep(2)
-      showToast('退出已写入假后端，救场票已生成')
+      showToast(`退出已写入${backendLabel()}，救场票已生成`)
     })()
   })
 
@@ -719,6 +756,8 @@ export function wireDesignToMock(): () => void {
       revision_required: 1,
       approved: 3,
       paid: 3,
+      rejected: 3,
+      cancelled: 0,
     }
     setRescueStep(stepMap[bounty.status] ?? 0)
     openModal(rescueFlowModal)
@@ -746,7 +785,7 @@ export function wireDesignToMock(): () => void {
   $('#finishRescueFlow')?.addEventListener('click', () => {
     closeModal(rescueFlowModal)
     trackTimeout(() => scrollToSection('rescue'), 120)
-    showToast('救场流程已同步到假后端')
+    showToast(`救场流程已同步到${backendLabel()}`)
   })
 
   $('#claimRescueTask')?.addEventListener('click', () => {
@@ -778,7 +817,7 @@ export function wireDesignToMock(): () => void {
       const bounty = result.bounties.find((item) => item.id === activeRescueId)
       if (bounty) fillRescueTask(bounty)
       setRescueStep(2)
-      showToast('成果已写入假后端，等待验收')
+      showToast(`成果已写入${backendLabel()}，等待验收`)
     })()
   })
 
@@ -829,7 +868,7 @@ export function wireDesignToMock(): () => void {
         const result = await run('切换账户', () => designBackend.switchAccount(next))
         if (result) {
           const name = accounts.find((a) => a.id === next)?.name ?? next
-          showToast(`已切换为 ${name}（假后端账户）`)
+          showToast(`已切换为 ${name}${isOnChainBackend ? '（本地测试账户）' : '（演示账户）'}`)
         }
         return
       }
@@ -855,16 +894,38 @@ export function wireDesignToMock(): () => void {
     if (section) navObserver.observe(section)
   })
 
-  // Initial hydrate
-  void designBackend.hydrate().then((initial) => {
-    snapshot = initial
-    renderAll()
-  })
+  // Initial hydrate — failures must not leave UI dead
+  void designBackend
+    .hydrate()
+    .then((initial) => {
+      snapshot = initial
+      renderAll()
+      if (isOnChainBackend && initial.projects.length === 0) {
+        showToast('已连接本地链 · 还没有项目，先创建一份承诺')
+      }
+    })
+    .catch((error) => {
+      console.error('[design] hydrate failed', error)
+      snapshot = {
+        wallet: { isConnected: false },
+        projects: [],
+        bounties: [],
+        activeProjectId: '',
+        activeScene: 'hackathon',
+      }
+      renderAll()
+      showToast(`链连接失败：${error instanceof Error ? error.message : '请确认 Anvil 在运行'}`)
+    })
 
   // Double-click brand to reset demo (escape hatch)
   $('.brand')?.addEventListener('dblclick', () => {
     void run('重置 Demo', () => designBackend.resetDemo()).then((result) => {
-      if (result) showToast('假后端已重置为初始演示数据')
+      if (!result) return
+      if (isOnChainBackend) {
+        showToast('已清除浏览器索引 · 链上状态需重启 Anvil 并重新部署')
+      } else {
+        showToast('演示数据已重置为初始状态')
+      }
     })
   })
 

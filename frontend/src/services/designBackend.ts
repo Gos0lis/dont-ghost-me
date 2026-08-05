@@ -7,6 +7,7 @@ import type {
   WalletConnection,
   WorkSubmission,
 } from '../contracts/types'
+import { LOCAL_DEMO_MEMBER_LIMIT } from '../contracts/chainConfig'
 import {
   type DesignSceneKey,
   type RescueTicketDraft,
@@ -15,7 +16,7 @@ import {
   ticketDraftToCreateInput,
 } from '../data/scenePresets'
 import { DEMO_PROJECT_ID, TRAVEL_PROJECT_ID } from '../data/mockData'
-import { contractService } from './contractService'
+import { contractService, isOnChainBackend } from './contractService'
 
 export interface DesignSnapshot {
   wallet: WalletConnection
@@ -44,6 +45,8 @@ const META_KEY = 'dont-ghost-me:design-meta:v1'
 interface DesignMeta {
   activeScene: 'hackathon' | 'travel'
   activeProjectId: string
+  /** Stable scene → projectId for local mode (avoids name regex). */
+  sceneProjectIds: Partial<Record<'hackathon' | 'travel', string>>
   /** Extra display fields keyed by bounty id */
   ticketMeta: Record<string, Partial<RescueTicketDraft>>
 }
@@ -51,13 +54,22 @@ interface DesignMeta {
 function readMeta(): DesignMeta {
   try {
     const raw = localStorage.getItem(META_KEY)
-    if (raw) return JSON.parse(raw) as DesignMeta
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<DesignMeta>
+      return {
+        activeScene: parsed.activeScene ?? 'hackathon',
+        activeProjectId: parsed.activeProjectId ?? DEMO_PROJECT_ID,
+        sceneProjectIds: parsed.sceneProjectIds ?? {},
+        ticketMeta: parsed.ticketMeta ?? {},
+      }
+    }
   } catch {
     /* ignore */
   }
   return {
     activeScene: 'hackathon',
     activeProjectId: DEMO_PROJECT_ID,
+    sceneProjectIds: {},
     ticketMeta: {},
   }
 }
@@ -90,9 +102,8 @@ function fakeAddress(seed: string): `0x${string}` {
 }
 
 /**
- * Design-facing fake backend.
- * Wraps mockContractService so the V11 UI can create / mutate real local state.
- * Later swap contractService binding to viem — this facade stays.
+ * Design-facing application layer over contractService.
+ * Works with mock OR viem (local Anvil / future Monad) — swap happens in contractService.ts.
  */
 export const designBackend = {
   async hydrate(): Promise<DesignSnapshot> {
@@ -104,7 +115,7 @@ export const designBackend = {
     ])
     const activeProjectId = projects.some((p) => p.id === meta.activeProjectId)
       ? meta.activeProjectId
-      : (projects[0]?.id ?? DEMO_PROJECT_ID)
+      : (projects[0]?.id ?? (isOnChainBackend ? '' : DEMO_PROJECT_ID))
     if (activeProjectId !== meta.activeProjectId) {
       meta.activeProjectId = activeProjectId
       writeMeta(meta)
@@ -125,7 +136,28 @@ export const designBackend = {
   async setScene(scene: 'hackathon' | 'travel'): Promise<DesignSnapshot> {
     const meta = readMeta()
     meta.activeScene = scene
-    meta.activeProjectId = SCENE_PROJECT[scene]
+    if (!isOnChainBackend) {
+      meta.activeProjectId = SCENE_PROJECT[scene]
+    } else {
+      const projects = await contractService.getProjects()
+      const mappedId = meta.sceneProjectIds[scene]
+      const mapped = mappedId ? projects.find((project) => project.id === mappedId) : undefined
+      if (mapped) {
+        meta.activeProjectId = mapped.id
+      } else {
+        const matched = projects.find((project) =>
+          scene === 'travel'
+            ? /旅行|travel/i.test(project.category + project.name)
+            : /黑客|hack/i.test(project.category + project.name),
+        )
+        if (matched) {
+          meta.activeProjectId = matched.id
+          meta.sceneProjectIds[scene] = matched.id
+        } else if (projects[0]) {
+          meta.activeProjectId = projects[0].id
+        }
+      }
+    }
     writeMeta(meta)
     return this.hydrate()
   },
@@ -140,10 +172,16 @@ export const designBackend = {
     return this.hydrate()
   },
 
-  /** Create a promise from the design modal → mock chain project. */
+  /** Create a promise from the design modal → mock / local project. */
   async createPromise(payload: CreatePromisePayload): Promise<DesignSnapshot> {
     await ensureWallet('caro')
     const deposit = Number(payload.deposit) || 0
+    if (!(deposit > 0)) throw new Error('保证金必须大于 0')
+    if (payload.members.length < 1) throw new Error('至少需要一名成员')
+    if (isOnChainBackend && payload.members.length > LOCAL_DEMO_MEMBER_LIMIT) {
+      throw new Error(`本地链演示最多 ${LOCAL_DEMO_MEMBER_LIMIT} 名成员`)
+    }
+
     const category =
       payload.scene === 'custom'
         ? payload.customSceneLabel?.trim() || scenePresets.custom.label
@@ -168,12 +206,14 @@ export const designBackend = {
 
     const receipt = await runTx(() => contractService.createProject(input))
     const projects = await contractService.getProjects()
-    // Newest project is prepended by mock service.
     const created = projects[0]
     const meta = readMeta()
     if (created) {
       meta.activeProjectId = created.id
-      if (payload.scene === 'hackathon' || payload.scene === 'travel') meta.activeScene = payload.scene
+      if (payload.scene === 'hackathon' || payload.scene === 'travel') {
+        meta.activeScene = payload.scene
+        meta.sceneProjectIds[payload.scene] = created.id
+      }
       writeMeta(meta)
     }
     void receipt
@@ -192,12 +232,25 @@ export const designBackend = {
     return this.hydrate()
   },
 
-  /** Confirm + lock one member (design “签署” step). */
+  /**
+   * Confirm + lock one member (design “签署” step).
+   * - mock: confirmParticipation then lockDeposit
+   * - local/chain: single joinProject via lockDeposit only
+   */
   async signMember(projectId: string, memberId: string) {
     await ensureWallet('caro')
     const project = await contractService.getProject(projectId)
     const member = project?.members.find((item) => item.id === memberId)
     if (!member) throw new Error('成员不存在')
+    if (member.status === 'active' || member.depositLocked) {
+      return this.hydrate()
+    }
+
+    if (isOnChainBackend) {
+      await runTx(() => contractService.lockDeposit(projectId, memberId))
+      return this.hydrate()
+    }
+
     if (member.status === 'invited') {
       await runTx(() => contractService.confirmParticipation(projectId, memberId))
     }
@@ -222,23 +275,45 @@ export const designBackend = {
     await runTx(() => contractService.quitProject(projectId, memberId))
 
     const templates = rescueTicketTemplates[scene]
-    const meta = readMeta()
-    for (const ticket of templates) {
-      await runTx(() =>
-        contractService.createBounty(ticketDraftToCreateInput(projectId, memberId, ticket)),
+    const projectAfterQuit = await contractService.getProject(projectId)
+    if (!projectAfterQuit) throw new Error('退出后无法读取项目')
+
+    const availablePool = projectAfterQuit.rescuePool - projectAfterQuit.reservedBounty
+    const ticketTotal = templates.reduce((sum, ticket) => sum + ticket.reward, 0)
+    if (ticketTotal > availablePool) {
+      throw new Error(
+        `救场票奖励合计 ${ticketTotal} 超过可用救场池 ${availablePool}，请调低票奖励或提高保证金`,
       )
-      // Avoid identical Date.now() ids when creating multiple tickets in one burst.
-      await new Promise((resolve) => window.setTimeout(resolve, 40))
-      const bounties = await contractService.getBounties()
-      const created = bounties.find(
-        (bounty) => bounty.projectId === projectId && bounty.title === ticket.title && bounty.status === 'open',
-      )
-      if (created) {
-        meta.ticketMeta[created.id] = ticket
-      }
     }
+
+    const meta = readMeta()
+    let completed = 0
+    try {
+      for (const ticket of templates) {
+        await runTx(() =>
+          contractService.createBounty(ticketDraftToCreateInput(projectId, memberId, ticket)),
+        )
+        completed += 1
+        // Avoid identical Date.now() ids when creating multiple tickets in one burst (mock).
+        await new Promise((resolve) => window.setTimeout(resolve, 40))
+        const bounties = await contractService.getBounties()
+        const created = bounties.find(
+          (bounty) => bounty.projectId === projectId && bounty.title === ticket.title && bounty.status === 'open',
+        )
+        if (created) {
+          meta.ticketMeta[created.id] = ticket
+        }
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '未知错误'
+      throw new Error(
+        `出票中断：已完成 ${completed}/${templates.length} 笔，失败在第 ${completed + 1} 笔。${detail}`,
+      )
+    }
+
     meta.activeScene = scene
     meta.activeProjectId = projectId
+    meta.sceneProjectIds[scene] = projectId
     writeMeta(meta)
     return this.hydrate()
   },
@@ -278,7 +353,8 @@ export const designBackend = {
     await contractService.resetDemo()
     writeMeta({
       activeScene: 'hackathon',
-      activeProjectId: DEMO_PROJECT_ID,
+      activeProjectId: isOnChainBackend ? '' : DEMO_PROJECT_ID,
+      sceneProjectIds: {},
       ticketMeta: {},
     })
     return this.hydrate()

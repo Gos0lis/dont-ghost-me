@@ -10,7 +10,7 @@
 **在线 Demo**：<https://dont-ghost-me.vercel.app>
 
 > [!IMPORTANT]
-> 当前版本是可交互 MVP：前端使用模拟钱包、模拟交易和 `localStorage` 展示完整业务流程，尚未连接已部署的 Monad 合约。请勿向 Demo 发送真实资产。
+> 当前产品展示默认使用 **mock**（`localStorage` 模拟后端）。本地 Anvil 联调使用 `VITE_CHAIN_MODE=local`。尚未连接真实公链 / Monad，请勿向 Demo 发送真实资产。
 
 ---
 
@@ -50,26 +50,28 @@
 - [x] 成员驱逐提案、保证金、投票、执行和退款机制
 - [x] 项目完成/取消后的成员保证金与救场池结算
 - [x] Solidity 接口、核心事件、错误定义及安全防护
-- [x] Foundry 功能与安全测试（当前共 52 项，包含 2 项脚手架示例测试）
-- [x] 黑客松、朋友旅行、游戏组队三套前端演示流程
+- [x] Foundry 功能与安全测试
+- [x] V11 设计工作台 + mock 演示闭环
+- [x] `viemContractService` 本地 Anvil 接入（2～3 人最小闭环）
+- [x] `script/DontGhostMe.s.sol` 本地部署脚本
 - [x] GitHub Actions 合约格式、构建与测试工作流
 
 ### 待完成
 
-- [ ] 编写 `DontGhostMe` 正式部署脚本并移除 Counter 脚手架
-- [ ] 配置 Monad RPC、Chain ID、环境变量模板及合约验证
-- [ ] 将前端模拟服务替换为 viem/wagmi 真实合约服务
-- [ ] 增加链上事件索引，支持项目、悬赏和驱逐提案列表查询
+- [ ] 完成 local Anvil 端到端验收清单（见 `PRODUCT_INTERFACE_EXECUTION_PLAN.md` 阶段 E）
+- [ ] 配置 Monad RPC、Chain ID 与真实钱包连接
+- [ ] 增加链上事件索引，支持完整列表查询
 - [ ] 为成果提交增加 URL、IPFS CID 或内容哈希存证
 - [ ] 补充部署地址、广播记录、安全分析和上线运维文档
 
 ### 当前已知限制
 
-- 前端 `contractService` 目前绑定 `mockContractService`，状态仅保存在浏览器本地。
-- wagmi 当前配置为 Mainnet/Sepolia，尚未切换至 Monad。
-- 仓库现有部署脚本仍是 Foundry Counter 示例，不能用于部署主合约。
-- 合约按 ID 提供查询接口；列表页接入真实链时需要事件索引器或链下服务。
-- 悬赏发布和成果验收目前仅允许项目发起人操作。
+- 默认 `VITE_CHAIN_MODE=mock`：金额与流程可演示，但不是链上真相。
+- `local` 模式最多 3 名成员（Anvil 演示账户：Caro / Yunn / Builder 07）。
+- local 重置只清浏览器索引，**不能**清链；需重启 Anvil 并重新部署。
+- 成果链接仍存浏览器元数据；换浏览器会丢失。
+- 合约按 ID 查询；列表依赖事件扫描 + 本地 index。
+- 公链 / MetaMask / Monad 暂未启用。
 
 ---
 
@@ -107,11 +109,14 @@ dont-ghost-me/
 │   ├── DontGhostMe.t.sol            # 功能测试
 │   └── DontGhostMeSecurity.t.sol    # 安全测试（重入等）
 ├── script/
-│   └── Counter.s.sol         # Foundry 示例，待替换为主合约部署脚本
-├── frontend/                 # React + Vite + TypeScript 前端 Demo
+│   └── DontGhostMe.s.sol     # 本地 / Anvil 部署脚本
+├── frontend/                 # React + Vite + TypeScript（V11 设计入口）
+│   ├── .env.example
 │   └── src/services/
-│       ├── contractService.ts        # 合约服务抽象
-│       └── mockContractService.ts    # 当前模拟实现
+│       ├── contractService.ts        # mock / local 切换
+│       ├── mockContractService.ts    # 产品演示
+│       ├── viemContractService.ts    # Anvil 联调
+│       └── designBackend.ts          # 设计层编排
 ├── lib/forge-std/            # Foundry 标准库
 └── foundry.toml              # Foundry 配置
 ```
@@ -120,7 +125,7 @@ dont-ghost-me/
 
 ## 智能合约
 
-合约使用 Foundry 工具链开发，保证金与悬赏奖励以原生代币结算（在 Monad 上为 MON）。
+合约使用 Foundry 工具链开发，保证金与悬赏奖励以原生代币结算（在 Monad 上为 MON；本地 Anvil 为 ETH）。
 
 ### 核心机制
 
@@ -189,73 +194,76 @@ anvil
 
 > Foundry 文档：<https://book.getfoundry.sh/>
 
-### 部署状态
+### 本地部署 DontGhostMe
 
-主合约尚未发布正式部署脚本和 Monad 部署地址。`script/Counter.s.sol` 是 Foundry 初始化模板，不代表 `DontGhostMe` 已部署。正式上链前还需要完成：
+```shell
+# 终端 1
+anvil
 
-1. 新增 `script/DontGhostMe.s.sol`；
-2. 配置 Monad RPC、部署账户和链参数；
-3. 部署并验证合约；
-4. 保存部署地址与广播记录；
-5. 将前端服务切换到真实 ABI 和合约地址。
+# 终端 2
+forge script script/DontGhostMe.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+将部署地址写入 `frontend/.env.local` 的 `VITE_CONTRACT_ADDRESS`。
 
 ---
 
 ## 前端 Demo
 
-前端基于 React、Vite 和 TypeScript。当前 Demo 不连接真实合约，所有关键业务操作通过统一的模拟合约服务执行，并使用 `localStorage` 模拟链上状态持久化。服务接口集中在 `frontend/src/services/contractService.ts`；后续可新增 `viemContractService.ts` 并替换绑定，复用现有页面流程。
+前端入口为 V11 设计页（`DesignApp` → `wireDesignToMock` → `designBackend` → `contractService`）。
 
-### 启动
+通过 `VITE_CHAIN_MODE` 切换后端：
+
+| 模式 | 用途 | 数据 |
+| --- | --- | --- |
+| `mock`（默认） | 产品展示 / UI 调试 | localStorage |
+| `local` | Anvil 合约联调 | 链上 + 浏览器元数据 |
+| `chain` | 未来公链 | 暂勿启用 |
+
+环境变量模板见 [`frontend/.env.example`](./frontend/.env.example)。
+
+### 启动（mock 产品演示）
 
 ```bash
 cd frontend
+cp .env.example .env.local   # 保持 VITE_CHAIN_MODE=mock
 npm install
 npm run dev
 ```
 
+双击品牌可重置演示数据。
+
+### 启动（local Anvil 联调）
+
+1. 启动 Anvil（`8545`）。
+2. 部署合约并写入 `frontend/.env.local`：
+   - `VITE_CHAIN_MODE=local`
+   - `VITE_CONTRACT_ADDRESS=0x...`
+   - `VITE_NATIVE_SYMBOL=ETH`
+3. `cd frontend && npm run dev`
+4. 仅支持 **2～3 人** 新建项目闭环：创建 → 分别 join → 退出出票 → 救场。
+5. 双击品牌重置：只清浏览器索引；需重启 Anvil 并重新部署才能清链。
+
+接口对齐说明见 [`PRODUCT_INTERFACE_AUDIT.md`](./PRODUCT_INTERFACE_AUDIT.md) 与 [`PRODUCT_INTERFACE_EXECUTION_PLAN.md`](./PRODUCT_INTERFACE_EXECUTION_PLAN.md)。
+
 生产构建：
 
 ```bash
+cd frontend
 npm run build
 ```
 
-### 推荐演示顺序
+### 推荐演示顺序（mock）
 
-#### 场景一：黑客松救场
+1. 打开首页，连接测试钱包 Caro。
+2. 创建一份承诺（或切换黑客松 / 旅行场景）。
+3. 进入成员确认，逐人「确认并签署」。
+4. 模拟一名成员退出，生成救场票。
+5. 切换到 Builder 07，领取 → 提交 → 切回 Caro 验收付款。
 
-1. 首页连接模拟钱包，默认选择项目发起人 Caro。
-2. 进入“我的项目”并打开“Monad 黑客松作品开发”。
-3. 点击“模拟 Yunn 鸽掉”，确认交易。
-4. 观察 Yunn 状态、保证金统计、救场池和时间线同步更新。
-5. 点击“发布救场悬赏”，发布“紧急完成智能合约 MVP”。
-6. 在右上角切换到 Builder 07，领取悬赏。
-7. 进入“我的任务”，提交预填好的救场成果。
-8. 切回 Caro，从项目或悬赏详情进入验收页面。
-9. 勾选四项验收标准，点击“验收通过并支付奖励”。
-10. 查看结算成功页：80 MON 到账、救场池剩余 20 MON、项目恢复进行。
-11. 回到项目页，确认最终里程碑并点击“完成项目并结算”。
-12. 项目进度更新为 100%，其余成员保证金解锁。
+### 主要路由（旧 React 业务页，当前未挂载）
 
-#### 场景二：朋友旅行
-
-1. 首页“更多使用场景”进入“朋友旅行”完整 Demo。
-2. 以 Caro 身份点击“模拟 Yoyo 临时退出”，确认退出交易。
-3. 观察 100 MON 从旅行保证金转入补救悬赏池。
-4. 点击“将 100 MON 拆成 3 个悬赏”，确认依次发布三笔交易。
-5. 查看 40 MON 寻找替补、40 MON 转卖门票、20 MON 修改酒店与行程。
-6. 可逐笔进入悬赏大厅操作，或使用“现场快速完成三项补救”。
-7. 点击“完成旅行并结算”，查看项目完成和 400 MON 保证金解锁。
-
-#### 场景三：游戏组队
-
-1. 首页进入“游戏开黑”已完成案例。
-2. 点击“回放完整救场过程”。
-3. 观察创建承诺、成员退出、悬赏发布、替补领取、成果验收、奖励支付和最终结算八个链上节点。
-4. 也可以点击任意进度节点，现场讲解对应的资金和项目状态。
-
-页面顶部提供“重置 Demo”，可以随时恢复初始状态。
-
-### 主要路由
+生产入口仅挂载 V11 设计页。下列路由代码仍保留在仓库中，供后续决策复用或删除：
 
 - `/` 首页
 - `/create` 创建共同承诺
@@ -263,22 +271,17 @@ npm run build
 - `/game-case` 游戏战队已完成案例回放
 - `/projects` 我的项目
 - `/project/:projectId` 项目详情
-- `/project/:projectId/create-bounty` 发布救场悬赏
 - `/bounties` 救场悬赏大厅
-- `/bounty/:bountyId` 悬赏详情
 - `/my-tasks` 我的救场任务
-- `/bounty/:bountyId/submit` 提交成果
-- `/project/:projectId/review/:bountyId` 验收成果
-- `/settlement-success` 结算成功
 
 ---
 
 ## 技术栈
 
 - **智能合约**：Solidity ^0.8.20 / Foundry（Forge、Cast、Anvil）
-- **前端**：React / TypeScript / Vite / React Router / Zustand
-- **Web3 客户端**：wagmi / viem / TanStack Query（真实合约接入待完成）
-- **目标链**：Monad（原生代币 MON，部署待完成）
+- **前端**：React / TypeScript / Vite
+- **Web3 客户端**：viem（local）；wagmi 预留
+- **目标链**：本地 Anvil 联调；Monad（MON）待启用
 - **持续集成**：GitHub Actions
 
 ---

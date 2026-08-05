@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
 import designBody from './designBody.html?raw'
-import { initDesignDemo } from './initDesignDemo.js'
+import { wireDesignToMock } from './wireDesignToMock'
 import '../styles/design-v11.css'
 
 /**
- * V11 design shell: mounts the static markup and wires hardcoded demo interactions.
- * Data is intentionally in-DOM / hardcoded; later phases can replace this with React state + contractService.
+ * V11 design shell wired to designBackend → mockContractService.
+ * UI mutations persist in localStorage; swap contractService later for on-chain.
  */
 export function DesignApp() {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -15,12 +15,12 @@ export function DesignApp() {
     if (!host) return
 
     host.innerHTML = designBody
-    const cleanup = initDesignDemo()
+    const cleanup = wireDesignToMock()
 
     return () => {
       cleanup()
       host.innerHTML = ''
-      document.body.classList.remove('modal-open')
+      document.body.classList.remove('modal-open', 'design-busy')
     }
   }, [])
 

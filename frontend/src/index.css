@@ -6,3 +6,8 @@
 .design-app-host {
   min-height: 100vh;
 }
+
+body.design-busy {
+  cursor: progress;
+}
+

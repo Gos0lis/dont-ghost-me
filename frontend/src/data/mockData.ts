@@ -436,7 +436,7 @@ export const showcaseBounties: Bounty[] = [
 
 export function createInitialChainState(): MockChainState {
   return {
-    version: 9,
+    version: 10,
     blockNumber: 12_345_670,
     accounts: structuredClone(demoAccounts),
     connection: { isConnected: false },

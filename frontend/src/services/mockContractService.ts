@@ -11,7 +11,7 @@ import type {
 } from '../contracts/types'
 import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
 
-const STORAGE_KEY = 'dont-ghost-me:mock-chain:v9'
+const STORAGE_KEY = 'dont-ghost-me:mock-chain:v10'
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -31,7 +31,7 @@ function readState(): MockChainState {
   }
   try {
     const parsed = JSON.parse(raw) as MockChainState
-    if (parsed.version !== 9) throw new Error('outdated mock state')
+    if (parsed.version !== 10) throw new Error('outdated mock state')
     return parsed
   } catch {
     const initial = createInitialChainState()
@@ -153,26 +153,32 @@ export const mockContractService: ContractService = {
       const members = input.members.map((member, index) => ({
         ...member,
         id: `member-${index}-${Date.now()}`,
-        depositLocked: true,
-        status: 'active' as const,
+        // Design flow: create first, then confirm + lock per member.
+        depositLocked: false,
+        status: 'invited' as const,
       }))
       const totalDeposit = members.reduce((sum, member) => sum + member.deposit, 0)
       state.projects.unshift({
         id,
         ...input,
         creatorAddress: account.address,
-        status: 'active',
-        progress: 5,
+        status: 'awaiting_confirmation',
+        progress: 0,
         totalDeposit,
-        lockedDeposit: totalDeposit,
+        lockedDeposit: 0,
         rescuePool: 0,
         reservedBounty: 0,
         members,
         timeline: [
-          timeline('project', '共同承诺创建成功', `${members.length} 名成员已加入并锁定 ${totalDeposit} MON`, hash),
+          timeline(
+            'project',
+            '共同承诺已寄出',
+            `${members.length} 名成员待确认，合计计划锁定 ${totalDeposit} MON`,
+            hash,
+          ),
         ],
       })
-      return `共同承诺创建成功，已锁定 ${totalDeposit} MON`
+      return `共同承诺已创建，等待成员确认并锁定保证金`
     })
   },
 
@@ -193,13 +199,25 @@ export const mockContractService: ContractService = {
       const member = project?.members.find((item) => item.id === memberId)
       if (!project || !member) throw new Error('成员或项目不存在')
       if (member.depositLocked) throw new Error('保证金已经锁定')
-      const account = currentAccount(state)
-      if (account.balance < member.deposit) throw new Error('MON 余额不足')
-      account.balance -= member.deposit
+      // Demo initiator can lock on behalf of invited members (design confirm flow).
+      const payer = state.accounts.find((item) => item.id === 'caro') ?? currentAccount(state)
+      if (payer.balance < member.deposit) throw new Error('MON 余额不足')
+      payer.balance -= member.deposit
+      if (state.connection.account?.id === payer.id) {
+        state.connection.account.balance = payer.balance
+      }
       member.depositLocked = true
       member.status = 'active'
       project.lockedDeposit += member.deposit
       project.timeline.push(timeline('member', `${member.name} 锁定保证金`, `已锁定 ${member.deposit} MON`, hash))
+      const allLocked = project.members.every((item) => item.depositLocked)
+      if (allLocked && project.status === 'awaiting_confirmation') {
+        project.status = 'active'
+        project.progress = Math.max(project.progress, 5)
+        project.timeline.push(
+          timeline('member', '全员确认完成', `共锁定 ${project.lockedDeposit} MON，承诺正式生效`, hash),
+        )
+      }
       return `成功锁定 ${member.deposit} MON`
     })
   },
@@ -339,8 +357,18 @@ export const mockContractService: ContractService = {
 
   async claimBounty(bountyId) {
     return writeTransaction('claimBounty', (state, hash) => {
-      const account = currentAccount(state)
-      if (account.role !== 'rescuer') throw new Error('请切换到外部救场者账户')
+      // Prefer rescuer account; designBackend switches to builder-07 before calling.
+      let account = currentAccount(state)
+      if (account.role !== 'rescuer') {
+        const rescuer = state.accounts.find((item) => item.role === 'rescuer')
+        if (!rescuer) throw new Error('请切换到外部救场者账户')
+        account = rescuer
+        state.connection = {
+          isConnected: true,
+          connector: state.connection.connector ?? 'MetaMask',
+          account: clone(rescuer),
+        }
+      }
       const bounty = state.bounties.find((item) => item.id === bountyId)
       const project = state.projects.find((item) => item.id === bounty?.projectId)
       if (!bounty || !project) throw new Error('悬赏不存在')

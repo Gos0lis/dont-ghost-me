@@ -1,0 +1,933 @@
+<svg class="svg-defs" aria-hidden="true">
+      <defs>
+        <filter id="rough-line" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence baseFrequency="0.012" numOctaves="2" seed="8" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.25" />
+        </filter>
+
+        <symbol id="flying-pigeon-up" viewBox="0 0 180 112">
+          <path class="flight-silhouette" d="M11 70 34 64 22 51l29 8c3-22 9-43 23-55 4 19 16 36 34 49 6-14 18-23 32-22 14 1 23 9 25 20l14 6-16 7c-4 12-16 19-29 17-15 15-42 21-68 13-15-4-25-12-30-21L16 87l10-15Z" />
+        </symbol>
+
+        <symbol id="flying-pigeon-down" viewBox="0 0 180 112">
+          <path class="flight-silhouette" d="M11 60 36 54 23 42l29 8c16-11 39-13 59-5 7-14 19-22 33-20 14 1 22 9 24 20l12 6-15 7c-4 12-16 19-29 17-8 8-18 14-30 17-18 9-38 16-59 20 3-19 13-35 28-47-12 1-24-2-34-8L16 78l11-15Z" />
+        </symbol>
+
+        <symbol id="mini-pigeon" viewBox="0 0 76 62">
+          <ellipse class="symbol-shape" cx="34" cy="36" rx="24" ry="18" />
+          <circle class="symbol-shape" cx="49" cy="22" r="14" />
+          <path class="symbol-beak" d="m59 23 13 5-12 6" />
+          <path class="symbol-wing" d="M30 30c-9-2-16 3-18 12 9 1 16-1 22-7" />
+          <circle class="pigeon-eye" cx="52" cy="19" r="2" />
+          <path class="symbol-line" d="M29 52v7m15-7 3 7" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <section class="intro" id="intro" aria-label="品牌开场动画">
+      <button class="skip-intro" id="skipIntro" type="button">跳过</button>
+      <div class="intro-dots" aria-hidden="true"></div>
+      <div class="flock" id="flock" aria-hidden="true"></div>
+
+      <div class="intro-brand" id="introBrand">
+        <div class="intro-mark" aria-hidden="true">
+          <svg viewBox="0 0 230 168">
+            <path class="logo-body" fill="#fefdf8" d="M50 86c0-37 30-64 68-64 34 0 61 19 70 48 4 14 2 34-8 49-16 24-52 33-84 24-29-8-46-27-46-57Z" />
+            <path class="logo-wing" fill="#edf3f1" d="M72 91c15-24 41-35 69-28-4 29-25 51-56 57" />
+            <circle class="logo-eye" cx="154" cy="53" r="4" />
+            <path class="logo-beak" d="m177 61 30 12-28 13" />
+            <path class="logo-leg" d="M102 139v15m29-14 5 14" />
+            <g class="logo-letter">
+              <path d="M178 78 216 91l-11 31-38-13Z" />
+              <path d="m178 79 15 19 23-7" />
+            </g>
+          </svg>
+        </div>
+        <p class="brand-cn">不要鸽我</p>
+        <h1>DON'T GHOST ME</h1>
+        <p class="intro-copy">让退出的保证金，变成奖励救场者的悬赏。</p>
+        <button class="enter-button" id="enterButton" type="button">进入工作台</button>
+      </div>
+    </section>
+
+    <div class="app" id="app" aria-hidden="true">
+      <header class="topbar">
+        <a class="brand" href="#home" aria-label="不要鸽我首页">
+          <span class="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 76 62"><use href="#mini-pigeon" /></svg>
+          </span>
+          <span class="brand-words">
+            <strong>不要鸽我</strong>
+            <small>DON'T GHOST ME</small>
+          </span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="主要导航">
+          <button class="nav-link is-active" data-target="home" type="button">首页</button>
+          <button class="nav-link" data-target="commitment" type="button">我的承诺</button>
+          <button class="nav-link" data-target="rescue" type="button">救场大厅</button>
+          <button class="nav-link" data-target="mechanism" type="button">运行机制</button>
+        </nav>
+
+        <button class="wallet-button" id="walletButton" type="button">
+          <span class="wallet-dot" aria-hidden="true"></span>
+          测试钱包 · Caro
+        </button>
+      </header>
+
+      <main>
+        <section class="hero paper-surface" id="home">
+          <div class="tape tape-top" aria-hidden="true"></div>
+          <div class="hero-copy">
+            <p class="eyebrow"><span>Promise Delivery</span> · 01</p>
+            <h2>你可以鸽，<br />但你的钱会请别人来救场。</h2>
+            <p class="hero-description">
+              为黑客松、朋友旅行和多人计划建立清晰的承诺。有人临时退出时，保证金自动进入救场悬赏池，奖励真正补上缺口的人。
+            </p>
+            <div class="hero-actions">
+              <button class="primary-button" id="promiseButton" type="button">
+                <svg viewBox="0 0 52 44" aria-hidden="true">
+                  <path d="M5 9h42v28H5zM6 10l20 16 20-16" />
+                </svg>
+                创建一份承诺
+              </button>
+              <button class="rescue-stamp" id="rescueButton" type="button" aria-label="前往救场大厅">
+                <span class="stamp-art" aria-hidden="true">
+                  <svg viewBox="0 0 66 52">
+                    <ellipse class="stamp-bird-body" cx="29" cy="31" rx="18" ry="13" />
+                    <circle class="stamp-bird-head" cx="42" cy="20" r="11" />
+                    <path class="stamp-bird-wing" d="M15 31c5-9 14-12 23-7-3 9-10 14-20 13" />
+                    <path class="stamp-bird-beak" d="m51 20 10 4-9 5" />
+                    <circle class="stamp-bird-eye" cx="45" cy="17" r="1.7" />
+                    <path class="stamp-note" d="m45 28 15 4-4 12-15-5Zm0 0 6 7 9-3" />
+                    <path class="stamp-motion" d="M7 18h8M5 23h6" />
+                  </svg>
+                </span>
+                <span class="stamp-copy">
+                  <strong>去救场</strong>
+                  <b>RESCUE!</b>
+                </span>
+                <span class="stamp-postmark" aria-hidden="true"><i></i></span>
+              </button>
+            </div>
+            <p class="micro-note">测试网络 · 模拟保证金 · 不涉及真实资金</p>
+          </div>
+
+          <div class="hero-art" aria-label="叼着承诺信的小白鸽插画">
+            <div class="polka-card" aria-hidden="true"></div>
+            <div class="mail-stamp" aria-hidden="true">PROMISE<br />DELIVERY</div>
+            <svg class="pigeon-letter" viewBox="0 0 420 330" role="img" aria-label="叼着信的小白鸽">
+              <path class="ground-line" d="M69 280c83 14 190 14 285 0" />
+              <ellipse class="bird-body" cx="204" cy="192" rx="101" ry="87" />
+              <circle class="bird-head" cx="283" cy="109" r="64" />
+              <path class="bird-wing" d="M124 190c23-54 78-75 133-43-13 63-59 103-118 91" />
+              <path class="bird-tail" d="m116 213-66 31 75 10" />
+              <path class="bird-beak" d="m333 112 65 24-62 28" />
+              <circle class="bird-eye" cx="301" cy="92" r="7" />
+              <path class="bird-leg" d="M176 266v30m70-31 8 31" />
+              <path class="bird-foot" d="m158 298 19-3 17 5m43 0 17-5 20 3" />
+              <g class="letter">
+                <path d="m331 151 73 22-20 58-73-23Z" />
+                <path d="m332 152 28 36 44-15" />
+                <path d="m311 207 47-19 26 42" />
+              </g>
+              <path class="motion-line" d="M65 144c-25-13-36-8-48-2m56 27c-30-2-44 6-54 15" />
+            </svg>
+            <p class="art-caption">承诺正在派送中…</p>
+          </div>
+        </section>
+
+        <section class="mechanism-strip" id="mechanism" aria-label="核心流程">
+          <div class="strip-title">
+            <span>HOW IT WORKS</span>
+            <strong>承诺发生意外以后</strong>
+          </div>
+          <ol class="steps">
+            <li><b>01</b><span>成员确认承诺</span></li>
+            <li><b>02</b><span>保证金被锁定</span></li>
+            <li><b>03</b><span>退出后进入救场池</span></li>
+            <li><b>04</b><span>救场者完成并领奖励</span></li>
+          </ol>
+        </section>
+
+        <section class="workspace-section" id="commitment">
+          <div class="demo-scene-switcher" aria-label="切换演示场景">
+            <div class="demo-scene-title">
+              <span>SCENE DEMO</span>
+              <strong>看看同一套机制如何处理不同的“鸽”</strong>
+            </div>
+            <div class="demo-scene-options" role="tablist" aria-label="演示场景">
+              <button class="demo-scene-button is-active" type="button" role="tab" aria-selected="true" data-demo-scene="hackathon">
+                <svg viewBox="0 0 58 46" aria-hidden="true"><path d="M8 9h42v29H8z" /><path d="M16 18h12m-12 8h27m-27 7h19M37 13l8 7-8 7" /></svg>
+                <span><b>黑客松</b><small>开发任务补位</small></span>
+              </button>
+              <button class="demo-scene-button" type="button" role="tab" aria-selected="false" data-demo-scene="travel">
+                <svg viewBox="0 0 58 46" aria-hidden="true"><path d="M12 13h34v27H12z" /><path d="M21 13V8h16v5M17 23h24M20 31h5m9 0h5M8 18h5v16H8zm37 0h5v16h-5z" /></svg>
+                <span><b>朋友旅行</b><small>行程费用补救</small></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" id="workspaceEyebrow">MY PROMISE · 001</p>
+              <h2>正在进行的承诺</h2>
+            </div>
+            <p id="workspaceDescription">一张承诺卡，记下成员、任务与每一笔保证金的去向。</p>
+          </div>
+
+          <div class="workbench">
+            <div class="project-paper">
+              <span class="paper-clip" aria-hidden="true"></span>
+              <div class="paper-header">
+                <div>
+                  <p class="tiny-label" id="projectSceneLabel">黑客松项目</p>
+                  <h3 id="projectCardTitle">Monad 黑客松作品开发</h3>
+                </div>
+                <span class="status-stamp"><small>RESCUE!</small><strong>救场中</strong></span>
+              </div>
+
+              <p class="project-summary" id="projectSummary">成员共同完成产品、前端和合约 Demo。当前有一名成员退出，保证金已转入救场池。</p>
+
+              <div class="promise-meta">
+                <div><span>承诺成员</span><strong id="projectMemberCount">5 人</strong></div>
+                <div><span>个人保证金</span><strong id="projectDeposit">100 MON</strong></div>
+                <div><span>当前阶段</span><strong id="projectStage">Demo 开发</strong></div>
+              </div>
+
+              <div class="timeline" aria-label="项目状态">
+                <button class="timeline-item timeline-confirm-button is-done" id="openConfirmFlow" type="button" aria-label="查看成员确认承诺流程"><i></i><span id="timelineOne">承诺已确认</span><small>查看确认过程</small></button>
+                <div class="timeline-item is-alert"><i></i><span id="timelineTwo">1 人退出</span></div>
+                <div class="timeline-item is-current"><i></i><span id="timelineThree">救场悬赏已发布</span></div>
+                <div class="timeline-item"><i></i><span id="timelineFour">等待验收与结算</span></div>
+              </div>
+
+              <div class="project-paper-actions">
+                <button class="exit-slip-button" id="openExitFlow" type="button">
+                  <span>EXIT NOTE</span>
+                  演示成员退出
+                </button>
+                <button class="text-button" data-scroll="rescue" type="button">查看救场任务 <span>→</span></button>
+              </div>
+            </div>
+
+            <aside class="fund-pocket">
+              <div class="pocket-label">RESCUE FUND</div>
+              <div class="money-amount"><strong id="fundAmount">100</strong><span>MON</span></div>
+              <p id="fundDescription">退出成员的保证金<br />已进入救场池</p>
+
+              <svg class="pigeon-money" viewBox="0 0 250 210" role="img" aria-label="抱着钱袋的小白鸽">
+                <ellipse class="bird-body" cx="109" cy="116" rx="68" ry="60" />
+                <circle class="bird-head" cx="154" cy="63" r="41" />
+                <path class="bird-wing" d="M59 119c20-39 59-48 92-20-14 44-48 62-86 48" />
+                <path class="bird-beak" d="m190 67 39 15-38 17" />
+                <circle class="bird-eye" cx="165" cy="52" r="4.5" />
+                <path class="bird-leg" d="M84 169v20m51-20 5 20" />
+                <g class="money-bag">
+                  <path d="M131 111c-18 12-26 28-22 48 4 23 24 37 49 34 24-3 38-20 35-43-2-17-14-31-30-40Z" />
+                  <path d="m134 110 26 1 7-19-35 1Z" />
+                  <path d="M147 126c7-5 18-2 19 6 1 11-18 9-16 19 1 7 11 9 18 4m-10-33-1 39" />
+                </g>
+              </svg>
+              <div class="verified-stamp">资金去向<br />可查看</div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="rescue-section" id="rescue">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" id="rescueBoardEyebrow">RESCUE BOARD · HACKATHON</p>
+              <h2>等待领取的救场票</h2>
+            </div>
+            <p id="rescueBoardDescription">选择一张任务票，补上团队留下的开发缺口。</p>
+          </div>
+
+          <div class="ticket-list" id="ticketList">
+            <button class="rescue-ticket" type="button" data-task="紧急完成智能合约 MVP" data-reward="80" data-category="开发 · 黑客松" data-deadline="08 月 08 日 · 22:00" data-proof="GitHub 仓库与部署说明">
+              <span class="ticket-number">NO. 01</span>
+              <span class="ticket-copy">
+                <small>开发 · 黑客松</small>
+                <strong>紧急完成智能合约 MVP</strong>
+                <em>提交代码仓库，等待团队验收</em>
+              </span>
+              <span class="ticket-reward"><b>80</b> MON</span>
+              <span class="ticket-status">待领取</span>
+            </button>
+
+            <button class="rescue-ticket" type="button" data-task="整理代码交接与部署说明" data-reward="20" data-category="文档 · 黑客松" data-deadline="08 月 09 日 · 12:00" data-proof="交接文档与运行截图">
+              <span class="ticket-number">NO. 02</span>
+              <span class="ticket-copy">
+                <small>文档 · 黑客松</small>
+                <strong>整理代码交接与部署说明</strong>
+                <em>补充必要文件与运行步骤</em>
+              </span>
+              <span class="ticket-reward"><b>20</b> MON</span>
+              <span class="ticket-status">待领取</span>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="footer-pigeon" aria-hidden="true">
+          <svg viewBox="0 0 76 62"><use href="#mini-pigeon" /></svg>
+        </div>
+        <p>不要鸽我 · 让承诺有人完成</p>
+        <small>Don't Ghost Me · Mini Demo</small>
+      </footer>
+
+      <nav class="mobile-nav" aria-label="手机端主要导航">
+        <button class="mobile-nav-item is-active" data-target="home" type="button">
+          <svg viewBox="0 0 76 62"><use href="#mini-pigeon" /></svg><span>首页</span>
+        </button>
+        <button class="mobile-nav-item" data-target="commitment" type="button">
+          <svg viewBox="0 0 52 44"><path d="M5 9h42v28H5zM6 10l20 16 20-16" /></svg><span>承诺</span>
+        </button>
+        <button class="mobile-nav-item" data-target="rescue" type="button">
+          <svg viewBox="0 0 56 44"><path d="M5 7h46v30H5c3-5 3-10 0-15 3-5 3-10 0-15Z" /><path d="M22 15h17M18 23h21M22 31h12" /></svg><span>救场</span>
+        </button>
+        <button class="mobile-nav-item" data-target="mechanism" type="button">
+          <svg viewBox="0 0 52 48"><path d="M10 7h32v34H10zM17 16h18M17 24h18M17 32h12" /></svg><span>机制</span>
+        </button>
+      </nav>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="promise-modal" id="promiseModal" aria-hidden="true">
+      <button class="promise-backdrop" id="promiseBackdrop" type="button" aria-label="关闭创建承诺窗口"></button>
+
+      <section class="promise-dialog" role="dialog" aria-modal="true" aria-labelledby="promiseModalTitle">
+        <span class="promise-dialog-tape" aria-hidden="true"></span>
+        <button class="promise-modal-close" id="closePromiseModal" type="button" aria-label="关闭">
+          <span></span><span></span>
+        </button>
+
+        <div class="promise-editor" id="promiseEditor">
+          <header class="promise-modal-heading">
+            <p class="modal-kicker">CREATE PROMISE · 001</p>
+            <h2 id="promiseModalTitle">写下一份不被鸽掉的承诺</h2>
+            <p>先把成员、任务和保证金说清楚。这里是交互演示，不会连接真实钱包。</p>
+          </header>
+
+          <div class="promise-modal-layout">
+            <form class="promise-form" id="promiseForm">
+              <fieldset class="scene-switcher">
+                <legend>01 · 选择场景</legend>
+                <div class="scene-options">
+                  <button class="scene-option is-selected" type="button" data-scene="hackathon">
+                    <svg viewBox="0 0 84 66" aria-hidden="true">
+                      <path class="scene-paper" d="M15 13h54v38H15z" />
+                      <path class="scene-line" d="M24 24h13m-13 9h30m-30 9h22M51 17l10 9-10 9" />
+                      <path class="scene-tape" d="m33 8 22 2-2 8-22-2Z" />
+                    </svg>
+                    <span><strong>黑客松团队</strong><small>开发任务需要补位</small></span>
+                  </button>
+
+                  <button class="scene-option" type="button" data-scene="travel">
+                    <svg viewBox="0 0 84 66" aria-hidden="true">
+                      <path class="scene-paper" d="M20 18h44v35H20z" />
+                      <path class="scene-line" d="M33 18v-6h18v6M27 30h30M31 39h6m10 0h6" />
+                      <path class="scene-tape" d="M16 23h8v20h-8zm44 0h8v20h-8z" />
+                    </svg>
+                    <span><strong>朋友旅行</strong><small>行程和费用需要接手</small></span>
+                  </button>
+
+                  <button class="scene-option" type="button" data-scene="custom">
+                    <svg viewBox="0 0 84 66" aria-hidden="true">
+                      <path class="scene-paper" d="M16 12h48v43H16z" />
+                      <path class="scene-line" d="M26 26h23m-23 9h17m-17 9h12M53 39l15-15 6 6-15 15-10 3Z" />
+                      <path class="scene-tape" d="m30 8 24 2-2 8-24-2Z" />
+                    </svg>
+                    <span><strong>自由自定义</strong><small>写下任何多人计划</small></span>
+                  </button>
+                </div>
+
+                <div class="custom-scene-field" id="customSceneField" hidden>
+                  <label class="promise-field">
+                    <span>自定义场景名称</span>
+                    <input id="customSceneName" type="text" value="我的多人计划" maxlength="16" autocomplete="off" />
+                  </label>
+                  <small>例如：课程作业、游戏组队、生日派对</small>
+                </div>
+              </fieldset>
+
+              <div class="promise-field-block">
+                <p class="form-number">02 · 承诺内容</p>
+                <label class="promise-field promise-field-wide">
+                  <span>项目名称</span>
+                  <input id="projectName" type="text" value="Monad 黑客松作品开发" autocomplete="off" />
+                </label>
+
+                <div class="promise-field-row">
+                  <label class="promise-field">
+                    <span>完成日期</span>
+                    <input id="promiseDeadline" type="date" value="2026-08-09" />
+                  </label>
+                  <label class="promise-field">
+                    <span>每人保证金</span>
+                    <span class="amount-input"><input id="promiseDeposit" type="number" min="0" value="100" /><b>MON</b></span>
+                  </label>
+                </div>
+              </div>
+
+              <section class="member-section">
+                <div class="member-section-heading">
+                  <div>
+                    <p class="form-number">03 · 成员与任务</p>
+                    <span>每个人都要有一张自己的任务纸条</span>
+                  </div>
+                  <button class="add-member-button" id="addMemberButton" type="button">＋ 添加成员</button>
+                </div>
+
+                <div class="member-list" id="memberList">
+                  <div class="member-row">
+                    <span class="member-tag">01</span>
+                    <label><span>成员</span><input class="member-name" type="text" value="Caro" /></label>
+                    <label><span>负责的承诺</span><input class="member-task" type="text" value="产品与前端 Demo" /></label>
+                    <button class="remove-member" type="button" aria-label="移除成员">×</button>
+                  </div>
+                  <div class="member-row">
+                    <span class="member-tag">02</span>
+                    <label><span>成员</span><input class="member-name" type="text" value="Lin" /></label>
+                    <label><span>负责的承诺</span><input class="member-task" type="text" value="智能合约与测试" /></label>
+                    <button class="remove-member" type="button" aria-label="移除成员">×</button>
+                  </div>
+                </div>
+              </section>
+
+              <label class="promise-rule">
+                <input id="promiseRule" type="checkbox" checked />
+                <span class="checkmark" aria-hidden="true"></span>
+                <span>我同意：成员退出后，保证金会变成救场悬赏，奖励真正补上任务的人。</span>
+              </label>
+            </form>
+
+            <aside class="promise-preview" aria-label="承诺卡预览">
+              <span class="preview-pin" aria-hidden="true"></span>
+              <p class="preview-label">PROMISE PREVIEW</p>
+              <svg class="preview-pigeon" viewBox="0 0 250 190" role="img" aria-label="抱着承诺书的小白鸽">
+                <path class="preview-motion" d="M29 96c-15-7-21-4-27 1m30 13c-17 0-24 5-29 11" />
+                <ellipse class="preview-bird-body" cx="112" cy="104" rx="65" ry="54" />
+                <circle class="preview-bird-head" cx="158" cy="59" r="39" />
+                <path class="preview-bird-wing" d="M65 104c15-35 50-47 85-28-8 39-38 63-74 55" />
+                <path class="preview-bird-tail" d="m57 122-39 20 45 4" />
+                <path class="preview-bird-beak" d="m190 61 34 13-33 15" />
+                <circle class="preview-bird-eye" cx="170" cy="50" r="4" />
+                <path class="preview-bird-leg" d="M91 153v18m43-18 5 18" />
+                <g class="preview-contract">
+                  <path d="m142 99 75 9-7 55-75-10Z" />
+                  <path d="m151 118 45 5m-47 11 37 4m-39 10 26 3" />
+                  <path d="m195 143 7 7 14-17" />
+                </g>
+              </svg>
+
+              <div class="preview-copy">
+                <span id="previewScene">黑客松团队</span>
+                <h3 id="previewTitle">Monad 黑客松作品开发</h3>
+                <dl>
+                  <div><dt>完成日期</dt><dd id="previewDeadline">2026.08.09</dd></div>
+                  <div><dt>保证金</dt><dd><b id="previewDeposit">100</b> MON / 人</dd></div>
+                  <div><dt>承诺成员</dt><dd id="previewMembers">2 人</dd></div>
+                </dl>
+              </div>
+              <div class="preview-stamp">PROMISE<br /><strong>已写下</strong></div>
+              <p class="preview-note">退出不是结束，留下的任务会被送去救场。</p>
+            </aside>
+          </div>
+
+          <footer class="promise-modal-actions">
+            <button class="promise-secondary-action" id="saveDraftButton" type="button">保存草稿</button>
+            <button class="promise-primary-action" id="sendPromiseButton" type="button">
+              <svg viewBox="0 0 52 44" aria-hidden="true"><path d="M5 9h42v28H5zM6 10l20 16 20-16" /></svg>
+              确认并发出承诺
+            </button>
+          </footer>
+        </div>
+
+        <div class="promise-success" id="promiseSuccess" hidden>
+          <p class="success-kicker">SENT · DONE!</p>
+          <div class="success-illustration" aria-hidden="true">
+            <span class="success-rays"></span>
+            <svg viewBox="0 0 320 240">
+              <ellipse class="success-bird-body" cx="139" cy="133" rx="78" ry="66" />
+              <circle class="success-bird-head" cx="195" cy="76" r="47" />
+              <path class="success-bird-wing" d="M83 132c19-43 61-57 102-34-10 48-46 77-91 67" />
+              <path class="success-bird-tail" d="m73 151-48 24 55 6" />
+              <path class="success-bird-beak" d="m233 78 42 16-40 18" />
+              <circle class="success-bird-eye" cx="209" cy="65" r="5" />
+              <path class="success-bird-leg" d="M114 197v21m51-21 6 21" />
+              <g class="success-letter"><path d="m189 116 88 15-12 65-88-16Z" /><path d="m190 117 36 39 51-25" /></g>
+            </svg>
+            <span class="success-done-stamp">DONE!</span>
+          </div>
+
+          <h2>承诺已寄出</h2>
+          <p>这份承诺卡已经准备好了。接下来可以交给队友按这个流程实现真实数据和钱包交互。</p>
+
+          <div class="promise-receipt">
+            <span>DELIVERY RECEIPT · 001</span>
+            <strong id="successProjectName">Monad 黑客松作品开发</strong>
+            <div><small>状态</small><b>等待成员确认</b></div>
+            <div><small>资金</small><b>仅为界面演示</b></div>
+          </div>
+
+          <div class="success-actions">
+            <button class="promise-secondary-action" id="makeAnotherPromise" type="button">再写一份</button>
+            <button class="promise-primary-action" id="viewPromiseCard" type="button">邀请成员确认</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="exit-flow-modal confirm-flow-modal" id="confirmFlowModal" aria-hidden="true">
+      <button class="exit-flow-backdrop" id="confirmFlowBackdrop" type="button" aria-label="关闭成员确认流程"></button>
+
+      <section class="exit-flow-dialog confirm-flow-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmFlowTitle">
+        <span class="exit-dialog-tape" aria-hidden="true"></span>
+        <button class="exit-flow-close" id="closeConfirmFlow" type="button" aria-label="关闭">
+          <span></span><span></span>
+        </button>
+
+        <header class="exit-flow-heading">
+          <p class="exit-flow-kicker">PROMISE SIGNING · 001</p>
+          <h2 id="confirmFlowTitle">每个人都要亲手确认这份承诺</h2>
+          <p>成员核对自己的任务和保证金后逐个签署。全部确认完成，承诺才正式生效。</p>
+        </header>
+
+        <ol class="exit-progress confirm-progress" aria-label="成员确认承诺流程">
+          <li class="is-current" data-confirm-step="0"><b>01</b><span>查看承诺邀请</span></li>
+          <li data-confirm-step="1"><b>02</b><span>成员逐个签署</span></li>
+          <li data-confirm-step="2"><b>03</b><span>保证金已锁定</span></li>
+        </ol>
+
+        <div class="confirm-flow-panels">
+          <section class="confirm-flow-panel" data-confirm-panel="0">
+            <div class="promise-invite-layout">
+              <article class="promise-invite-paper">
+                <span class="exit-paper-label">PROMISE INVITATION</span>
+                <p class="confirm-scene-name" id="confirmSceneName">黑客松项目</p>
+                <h3 id="confirmProjectName">Monad 黑客松作品开发</h3>
+                <p>请先核对承诺内容。签署后，每位成员会锁定自己的模拟保证金。</p>
+
+                <dl class="confirm-promise-meta">
+                  <div><dt>承诺成员</dt><dd id="confirmMemberTotal">5 人</dd></div>
+                  <div><dt>每人保证金</dt><dd><b id="confirmPerDeposit">100</b> MON</dd></div>
+                  <div><dt>当前状态</dt><dd>等待成员确认</dd></div>
+                </dl>
+
+                <div class="confirm-rules-note">
+                  <span>这份承诺会记录</span>
+                  <p>成员任务 · 完成期限 · 保证金去向 · 退出后的救场规则</p>
+                </div>
+              </article>
+
+              <aside class="promise-invite-art" aria-label="叼着承诺邀请函的小白鸽">
+                <span class="invite-postmark">PLEASE<br />CONFIRM</span>
+                <svg viewBox="0 0 280 225" aria-hidden="true">
+                  <ellipse class="exit-bird-body" cx="112" cy="133" rx="73" ry="61" />
+                  <circle class="exit-bird-head" cx="165" cy="74" r="44" />
+                  <path class="exit-bird-wing" d="M60 132c18-43 60-55 98-31-12 47-48 74-90 62" />
+                  <path class="exit-bird-tail" d="m52 149-45 24 52 5" />
+                  <path class="exit-bird-beak" d="m205 77 40 15-39 18" />
+                  <circle class="exit-bird-eye" cx="179" cy="63" r="4.4" />
+                  <path class="exit-bird-leg" d="M89 188v20m50-20 6 20" />
+                  <g class="confirm-letter-art"><path d="m182 104 82 12-9 58-81-12Z" /><path d="m183 106 34 30 46-19M176 160l36-25m43 38-36-37" /></g>
+                </svg>
+                <p>一封等待所有人签名的承诺信</p>
+              </aside>
+            </div>
+
+            <footer class="exit-panel-actions">
+              <button class="flow-secondary-button" id="cancelConfirmFlow" type="button">稍后再确认</button>
+              <button class="flow-primary-button" id="reviewConfirmMembers" type="button">核对成员与任务</button>
+            </footer>
+          </section>
+
+          <section class="confirm-flow-panel" data-confirm-panel="1" hidden>
+            <div class="member-signing-layout">
+              <article class="member-signing-paper">
+                <span class="exit-paper-label">MEMBER SIGNATURES</span>
+                <h3>选择成员，逐个盖下确认章</h3>
+                <p>这里用测试钱包模拟切换成员，不会发生真实转账。</p>
+                <div class="confirm-member-list" id="confirmMemberList"></div>
+              </article>
+
+              <aside class="current-signer-slip">
+                <span>CURRENT SIGNER</span>
+                <div class="signer-number" id="currentSignerNumber">01</div>
+                <h4 id="currentSignerName">Caro</h4>
+                <p id="currentSignerTask">产品与前端 Demo</p>
+                <dl>
+                  <div><dt>需要锁定</dt><dd><b id="signerDeposit">100</b> MON</dd></div>
+                  <div><dt>测试钱包</dt><dd>0x7C...D12</dd></div>
+                </dl>
+                <div class="signature-line"><i></i><span>在这里盖章确认</span></div>
+              </aside>
+            </div>
+
+            <footer class="exit-panel-actions">
+              <button class="flow-secondary-button" id="backToPromiseInvite" type="button">返回承诺内容</button>
+              <button class="flow-primary-button" id="confirmCurrentMember" type="button">确认任务并锁定保证金</button>
+            </footer>
+          </section>
+
+          <section class="confirm-flow-panel confirm-complete-panel" data-confirm-panel="2" hidden>
+            <div class="confirm-complete-art" aria-hidden="true">
+              <span class="confirm-polka"></span>
+              <svg viewBox="0 0 310 235">
+                <ellipse class="exit-bird-body" cx="128" cy="137" rx="76" ry="63" />
+                <circle class="exit-bird-head" cx="183" cy="77" r="46" />
+                <path class="exit-bird-wing" d="M74 137c20-44 62-57 102-32-12 49-50 76-94 64" />
+                <path class="exit-bird-tail" d="m64 154-47 25 54 6" />
+                <path class="exit-bird-beak" d="m225 80 42 16-41 19" />
+                <circle class="exit-bird-eye" cx="198" cy="66" r="4.6" />
+                <path class="exit-bird-leg" d="M103 195v21m52-21 6 21" />
+                <g class="confirm-contract-art"><path d="m176 124 96 13-10 70-96-14Z" /><path d="m193 151 54 7m-57 10 43 6m-47 11 30 4" /><path d="m228 181 10 10 20-26" /></g>
+              </svg>
+              <span class="confirm-done-stamp">SIGNED!<b>承诺生效</b></span>
+            </div>
+
+            <h3>所有成员都确认好了</h3>
+            <p>任务与保证金已经锁定。之后若有人退出，他的个人保证金才会进入救场池。</p>
+
+            <div class="confirm-receipt">
+              <span>LOCK RECEIPT · 001</span>
+              <div><small>已确认成员</small><strong id="confirmedMemberCount">5 / 5</strong></div>
+              <div><small>每人锁定</small><strong><b id="confirmedPerDeposit">100</b> MON</strong></div>
+              <div><small>模拟锁定总额</small><strong><b id="confirmedTotalDeposit">500</b> MON</strong></div>
+            </div>
+
+            <footer class="exit-panel-actions confirm-complete-actions">
+              <button class="flow-secondary-button" id="restartConfirmFlow" type="button">重新演示</button>
+              <button class="flow-primary-button" id="finishConfirmFlow" type="button">进入承诺卡</button>
+            </footer>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <div class="exit-flow-modal" id="exitFlowModal" aria-hidden="true">
+      <button class="exit-flow-backdrop" id="exitFlowBackdrop" type="button" aria-label="关闭成员退出流程"></button>
+
+      <section class="exit-flow-dialog" role="dialog" aria-modal="true" aria-labelledby="exitFlowTitle">
+        <span class="exit-dialog-tape" aria-hidden="true"></span>
+        <button class="exit-flow-close" id="closeExitFlow" type="button" aria-label="关闭">
+          <span></span><span></span>
+        </button>
+
+        <header class="exit-flow-heading">
+          <p class="exit-flow-kicker">MEMBER EXIT · 001</p>
+          <h2 id="exitFlowTitle">成员退出了，留下的任务怎么办？</h2>
+          <p>这里演示退出确认、保证金转入救场池，以及任务拆成救场票的过程。</p>
+        </header>
+
+        <ol class="exit-progress" aria-label="成员退出处理流程">
+          <li class="is-current" data-exit-step="0"><b>01</b><span>确认退出成员</span></li>
+          <li data-exit-step="1"><b>02</b><span>拆分遗留任务</span></li>
+          <li data-exit-step="2"><b>03</b><span>转入救场池</span></li>
+        </ol>
+
+        <div class="exit-flow-panels">
+          <section class="exit-flow-panel" data-exit-panel="0">
+            <div class="exit-member-layout">
+              <article class="exit-member-paper">
+                <span class="exit-paper-label">选择退出成员</span>
+                <h3>谁临时无法继续参加？</h3>
+                <p>选择后会显示他留下的承诺和对应保证金。</p>
+                <div class="exit-member-options" id="exitMemberOptions"></div>
+              </article>
+
+              <aside class="exit-deposit-pocket">
+                <span>LOCKED DEPOSIT</span>
+                <strong><b id="exitDepositAmount">100</b> MON</strong>
+                <p>这笔保证金原本用于确认成员承诺，退出后将成为救场奖励。</p>
+                <svg viewBox="0 0 210 155" aria-hidden="true">
+                  <ellipse class="exit-bird-body" cx="81" cy="91" rx="54" ry="45" />
+                  <circle class="exit-bird-head" cx="120" cy="49" r="32" />
+                  <path class="exit-bird-wing" d="M42 92c14-30 45-40 73-20-9 35-38 52-69 40" />
+                  <path class="exit-bird-tail" d="m39 105-30 17 35 3" />
+                  <path class="exit-bird-beak" d="m149 51 29 11-28 13" />
+                  <circle class="exit-bird-eye" cx="131" cy="42" r="3.3" />
+                  <path class="exit-bird-leg" d="M66 128v14m37-14 4 14" />
+                  <g class="exit-bird-note"><path d="m112 91 68 8-7 47-68-8Z" /><path d="m124 109 39 5m-41 10 31 4" /></g>
+                </svg>
+              </aside>
+            </div>
+
+            <footer class="exit-panel-actions">
+              <button class="flow-secondary-button" id="cancelExitFlow" type="button">暂不退出</button>
+              <button class="flow-primary-button" id="continueExitFlow" type="button">确认并查看遗留任务</button>
+            </footer>
+          </section>
+
+          <section class="exit-flow-panel" data-exit-panel="1" hidden>
+            <div class="exit-task-layout">
+              <article class="torn-task-paper">
+                <span class="exit-paper-label">TORN PROMISE NOTE</span>
+                <h3><b id="exitingMemberName">Kai</b> 留下的任务纸条</h3>
+                <p id="exitingMemberRole">原负责：智能合约开发</p>
+                <div class="exit-task-list" id="exitTaskList"></div>
+              </article>
+
+              <div class="exit-transfer-arrow" aria-hidden="true">
+                <span>保证金转化</span>
+                <i>→</i>
+              </div>
+
+              <aside class="exit-fund-envelope">
+                <span>RESCUE FUND</span>
+                <strong><b id="exitPoolAmount">100</b> MON</strong>
+                <p>金额会按遗留任务拆成救场票，验收通过后支付给补位者。</p>
+                <div class="exit-allocation-stamp">READY<br /><b>待转入</b></div>
+              </aside>
+            </div>
+
+            <label class="exit-confirm-rule">
+              <input id="exitConfirmRule" type="checkbox" checked />
+              <span></span>
+              我确认：退出成员的保证金将用于处理其留下的任务缺口。
+            </label>
+
+            <footer class="exit-panel-actions">
+              <button class="flow-secondary-button" id="backToExitMember" type="button">返回修改</button>
+              <button class="flow-primary-button" id="confirmExitTransfer" type="button">确认退出并转入救场池</button>
+            </footer>
+          </section>
+
+          <section class="exit-flow-panel exit-complete-panel" data-exit-panel="2" hidden>
+            <div class="exit-receipt-illustration" aria-hidden="true">
+              <svg viewBox="0 0 290 215">
+                <ellipse class="exit-bird-body" cx="118" cy="125" rx="70" ry="58" />
+                <circle class="exit-bird-head" cx="168" cy="69" r="42" />
+                <path class="exit-bird-wing" d="M67 125c18-41 57-53 94-30-11 45-45 70-86 60" />
+                <path class="exit-bird-tail" d="m58 141-43 23 49 5" />
+                <path class="exit-bird-beak" d="m207 72 39 15-38 17" />
+                <circle class="exit-bird-eye" cx="181" cy="59" r="4.2" />
+                <path class="exit-bird-leg" d="M96 178v19m47-19 6 19" />
+                <g class="exit-money-bag"><path d="M175 124c-18 13-25 29-20 47 6 22 25 32 47 27 21-5 32-22 27-43-4-16-16-28-31-36Z" /><path d="m178 123 19-2 5-17-28 4Z" /><path d="M187 140c7-5 16-2 16 5 1 9-15 8-13 16 1 6 10 7 15 3m-8-28-2 34" /></g>
+              </svg>
+              <span class="exit-done-stamp">RESCUE!<b>已转入</b></span>
+            </div>
+
+            <h3>保证金已经变成救场奖励</h3>
+            <p>成员退出已确认，遗留任务也生成了对应救场票。项目可以继续往前走。</p>
+
+            <div class="exit-receipt">
+              <span>EXIT RECEIPT · 001</span>
+              <div><small>退出成员</small><strong id="exitReceiptMember">Kai</strong></div>
+              <div><small>转入救场池</small><strong><b id="exitReceiptAmount">100</b> MON</strong></div>
+              <div><small>生成救场票</small><strong id="exitReceiptTickets">2 张</strong></div>
+            </div>
+
+            <footer class="exit-panel-actions exit-complete-actions">
+              <button class="flow-secondary-button" id="finishExitFlow" type="button">完成并关闭</button>
+              <button class="flow-primary-button" id="viewGeneratedRescueTickets" type="button">查看生成的救场票</button>
+            </footer>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <div class="rescue-flow-modal" id="rescueFlowModal" aria-hidden="true">
+      <button class="rescue-flow-backdrop" id="rescueFlowBackdrop" type="button" aria-label="关闭救场任务窗口"></button>
+
+      <section class="rescue-flow-dialog" role="dialog" aria-modal="true" aria-labelledby="rescueFlowTitle">
+        <span class="rescue-ticket-tape" aria-hidden="true"></span>
+        <button class="rescue-flow-close" id="closeRescueFlow" type="button" aria-label="关闭">
+          <span></span><span></span>
+        </button>
+
+        <header class="rescue-flow-heading">
+          <div>
+            <p>RESCUE DELIVERY · NO. 01</p>
+            <h2 id="rescueFlowTitle">紧急完成智能合约 MVP</h2>
+          </div>
+          <span class="rescue-heading-label" id="rescueFlowCategory">开发 · 黑客松</span>
+        </header>
+
+        <ol class="rescue-progress" aria-label="救场任务流程">
+          <li class="is-current" data-rescue-step="0"><b>01</b><span>领取任务</span></li>
+          <li data-rescue-step="1"><b>02</b><span>提交成果</span></li>
+          <li data-rescue-step="2"><b>03</b><span>负责人验收</span></li>
+          <li data-rescue-step="3"><b>04</b><span>奖励结算</span></li>
+        </ol>
+
+        <div class="rescue-flow-panels">
+          <section class="rescue-flow-panel rescue-detail-panel" data-rescue-panel="0">
+            <article class="rescue-task-paper">
+              <span class="rescue-paper-clip" aria-hidden="true"></span>
+              <p class="rescue-panel-kicker">OPEN RESCUE TICKET</p>
+              <h3 id="rescueDetailTitle">紧急完成智能合约 MVP</h3>
+              <p class="rescue-task-copy" id="rescueTaskCopy">队友退出后留下了合约开发缺口。领取后，请在截止时间前完成核心逻辑并提交可运行成果。</p>
+
+              <dl class="rescue-task-meta">
+                <div><dt>截止时间</dt><dd id="rescueDeadline">08 月 08 日 · 22:00</dd></div>
+                <div><dt>验收凭证</dt><dd id="rescueProof">GitHub 仓库与部署说明</dd></div>
+                <div><dt>验收人</dt><dd>项目负责人 · Caro</dd></div>
+              </dl>
+
+              <div class="rescue-checklist">
+                <p>交付清单</p>
+                <label><input type="checkbox" checked disabled /><span></span><em id="rescueCheckOne">完成保证金、退出与救场池逻辑</em></label>
+                <label><input type="checkbox" checked disabled /><span></span><em id="rescueCheckTwo">补齐悬赏领取、提交与验收状态</em></label>
+                <label><input type="checkbox" checked disabled /><span></span><em id="rescueCheckThree">提交代码仓库和简短运行说明</em></label>
+              </div>
+
+              <p class="rescue-paper-note">领取后，这张票会暂时从救场大厅收起，避免多人重复开工。</p>
+            </article>
+
+            <aside class="rescue-reward-pocket">
+              <p class="rescue-panel-kicker">RESCUE REWARD</p>
+              <div class="rescue-reward-number"><strong id="rescueReward">80</strong><span>MON</span></div>
+              <p>来自退出成员的保证金<br />验收通过后发放</p>
+
+              <svg class="flow-money-pigeon" viewBox="0 0 270 225" role="img" aria-label="抱着救场钱袋的小白鸽">
+                <ellipse class="flow-bird-body" cx="116" cy="126" rx="70" ry="61" />
+                <circle class="flow-bird-head" cx="165" cy="70" r="42" />
+                <path class="flow-bird-wing" d="M65 127c20-40 60-50 95-22-14 45-49 65-89 50" />
+                <path class="flow-bird-tail" d="m55 145-43 22 49 6" />
+                <path class="flow-bird-beak" d="m202 73 39 15-38 17" />
+                <circle class="flow-bird-eye" cx="178" cy="59" r="4.5" />
+                <path class="flow-bird-leg" d="M91 179v21m52-21 6 21" />
+                <g class="flow-money-bag">
+                  <path d="M135 119c-18 13-26 30-22 50 5 24 26 38 51 34 25-4 39-22 35-46-3-18-15-32-32-42Z" />
+                  <path d="m138 117 28 1 7-19-37 1Z" />
+                  <path d="M153 135c7-5 18-2 19 7 1 11-18 9-16 20 1 7 12 9 19 4m-11-35-2 42" />
+                </g>
+              </svg>
+              <span class="reward-source-stamp">资金来源<br /><strong>可查看</strong></span>
+            </aside>
+
+            <footer class="rescue-panel-actions">
+              <button class="flow-secondary-button" id="backToRescueHall" type="button">先看看其他任务</button>
+              <button class="flow-primary-button" id="claimRescueTask" type="button">领取这张救场票</button>
+            </footer>
+          </section>
+
+          <section class="rescue-flow-panel rescue-submit-panel" data-rescue-panel="1" hidden>
+            <div class="submission-paper">
+              <span class="submission-number">02 · SUBMIT WORK</span>
+              <h3>把救场成果装进回邮信封</h3>
+              <p>提交可查看的成果地址，并留一段给验收人的说明。</p>
+
+              <label class="submission-field">
+                <span>成果链接</span>
+                <input id="rescueWorkLink" type="url" value="https://github.com/Gos0lis/dont-ghost-me" />
+              </label>
+              <label class="submission-field">
+                <span>交付说明</span>
+                <textarea id="rescueWorkNote" rows="4">已补齐核心合约逻辑与部署说明，请按交付清单验收。</textarea>
+              </label>
+
+              <div class="submission-attachment">
+                <svg viewBox="0 0 62 50" aria-hidden="true"><path d="M13 10h36v29H13zM14 11l17 14 17-14" /><path d="m9 16-5 4m8 3-7 2" /></svg>
+                <span><strong>交付凭证已装好</strong><small id="submissionProofSummary">代码仓库 · 部署说明 · 运行截图</small></span>
+              </div>
+            </div>
+
+            <aside class="claimed-receipt">
+              <p>CLAIM RECEIPT · 001</p>
+              <div class="claimed-stamp">CLAIMED!<strong>已领取</strong></div>
+              <dl>
+                <div><dt>救场者</dt><dd>测试钱包 · Caro</dd></div>
+                <div><dt>任务</dt><dd id="claimedTaskName">紧急完成智能合约 MVP</dd></div>
+                <div><dt>预留奖励</dt><dd><b id="claimedReward">80</b> MON</dd></div>
+                <div><dt>当前状态</dt><dd>等待提交成果</dd></div>
+              </dl>
+              <svg class="claimed-pigeon" viewBox="0 0 180 125" aria-hidden="true">
+                <ellipse class="flow-bird-body" cx="77" cy="75" rx="48" ry="40" />
+                <circle class="flow-bird-head" cx="112" cy="39" r="29" />
+                <path class="flow-bird-wing" d="M41 76c15-27 43-35 68-16-10 31-36 44-63 34" />
+                <path class="flow-bird-tail" d="m37 88-28 15 32 4" />
+                <path class="flow-bird-beak" d="m137 42 27 10-26 12" />
+                <circle class="flow-bird-eye" cx="121" cy="32" r="3" />
+                <path class="flow-bird-leg" d="M61 108v12m36-12 4 12" />
+              </svg>
+            </aside>
+
+            <footer class="rescue-panel-actions">
+              <button class="flow-secondary-button" id="returnToTaskDetail" type="button">返回任务详情</button>
+              <button class="flow-primary-button" id="submitRescueWork" type="button">提交救场成果</button>
+            </footer>
+          </section>
+
+          <section class="rescue-flow-panel rescue-review-panel" data-rescue-panel="2" hidden>
+            <article class="review-delivery-paper">
+              <p class="rescue-panel-kicker">DELIVERY FOR REVIEW</p>
+              <h3>救场成果已送达</h3>
+              <p>现在切换到负责人视角，核对成果是否满足原来的任务缺口。</p>
+
+              <div class="review-link-slip">
+                <span>成果地址</span>
+                <strong id="reviewWorkLink">github.com/Gos0lis/dont-ghost-me</strong>
+                <small id="reviewWorkNote">已补齐核心合约逻辑与部署说明，请按交付清单验收。</small>
+              </div>
+
+              <div class="review-checks">
+                <span><i></i>成果链接可以打开</span>
+                <span><i></i>交付内容符合任务描述</span>
+                <span><i></i>奖励金额与救场票一致</span>
+              </div>
+            </article>
+
+            <aside class="reviewer-paper">
+              <span class="reviewer-label">OWNER CHECK</span>
+              <svg class="review-pigeon" viewBox="0 0 210 155" aria-hidden="true">
+                <ellipse class="flow-bird-body" cx="89" cy="91" rx="55" ry="46" />
+                <circle class="flow-bird-head" cx="129" cy="49" r="33" />
+                <path class="flow-bird-wing" d="M48 91c16-31 49-40 77-19-11 36-41 51-72 39" />
+                <path class="flow-bird-tail" d="m44 105-32 17 37 4" />
+                <path class="flow-bird-beak" d="m158 51 31 12-30 13" />
+                <circle class="flow-bird-eye" cx="140" cy="41" r="3.4" />
+                <path class="flow-bird-leg" d="M72 129v15m39-15 5 15" />
+                <g class="flow-rubber-stamp"><path d="M129 91h50v31h-50z" /><path d="M139 91c0-15 28-15 29 0M124 122h61v11h-61z" /></g>
+              </svg>
+              <h4>负责人 · Caro</h4>
+              <p>通过后，奖励会从救场池结算给任务领取者。</p>
+              <div class="reviewer-sign">READY TO STAMP</div>
+            </aside>
+
+            <footer class="rescue-panel-actions">
+              <button class="flow-secondary-button" id="requestRescueRevision" type="button">要求返修</button>
+              <button class="flow-primary-button" id="approveRescueWork" type="button">通过并发放奖励</button>
+            </footer>
+          </section>
+
+          <section class="rescue-flow-panel rescue-paid-panel" data-rescue-panel="3" hidden>
+            <p class="paid-kicker">RESCUE COMPLETE · DONE!</p>
+            <div class="paid-illustration" aria-hidden="true">
+              <span class="paid-polka"></span>
+              <svg viewBox="0 0 330 245">
+                <ellipse class="flow-bird-body" cx="139" cy="139" rx="78" ry="66" />
+                <circle class="flow-bird-head" cx="195" cy="80" r="47" />
+                <path class="flow-bird-wing" d="M83 139c20-45 63-59 104-35-11 49-48 79-94 68" />
+                <path class="flow-bird-tail" d="m73 157-49 25 56 6" />
+                <path class="flow-bird-beak" d="m234 82 43 16-41 19" />
+                <circle class="flow-bird-eye" cx="210" cy="69" r="5" />
+                <path class="flow-bird-leg" d="M113 204v22m53-22 7 22" />
+                <g class="paid-receipt-art"><path d="m190 125 92 14-10 68-92-15Z" /><path d="m204 151 54 8m-57 9 43 7m-46 8 29 5" /><path d="m245 182 8 8 16-20" /></g>
+              </svg>
+              <span class="paid-done-stamp">DONE!<strong>救场完成</strong></span>
+            </div>
+
+            <h3>缺口补上了，奖励也送到了</h3>
+            <p>这张救场票已经完成结算。原项目可以继续推进，资金流向保留在回执中。</p>
+
+            <div class="paid-receipt">
+              <span>SETTLEMENT RECEIPT · 001</span>
+              <strong id="paidTaskName">紧急完成智能合约 MVP</strong>
+              <div><small>救场者</small><b>测试钱包 · Caro</b></div>
+              <div><small>已发放奖励</small><b><em id="paidReward">80</em> MON</b></div>
+              <div><small>状态</small><b>已验收 · 已结算</b></div>
+            </div>
+
+            <footer class="rescue-panel-actions paid-actions">
+              <button class="flow-secondary-button" id="replayRescueFlow" type="button">重新演示流程</button>
+              <button class="flow-primary-button" id="finishRescueFlow" type="button">完成并关闭</button>
+            </footer>
+          </section>
+        </div>
+      </section>
+    </div>

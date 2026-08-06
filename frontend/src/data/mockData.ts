@@ -32,7 +32,7 @@ export const demoAccounts: WalletAccount[] = [
   },
 ]
 
-const initialProject: Project = {
+export const initialProject: Project = {
   id: DEMO_PROJECT_ID,
   name: 'Monad 黑客松作品开发',
   description: '团队需要在截止日前完成产品设计、前端 Demo、智能合约、视觉方案和路演材料。',
@@ -122,7 +122,7 @@ const initialProject: Project = {
   ],
 }
 
-const travelProject: Project = {
+export const travelProject: Project = {
   id: TRAVEL_PROJECT_ID,
   name: '五人京都旅行计划',
   description: '五位朋友提前约定共同出行，分别负责门票、酒店、交通、路线和应急准备。',
@@ -212,7 +212,7 @@ const travelProject: Project = {
   ],
 }
 
-const completedGameProject: Project = {
+export const completedGameProject: Project = {
   id: GAME_PROJECT_ID,
   name: '周末峡谷挑战赛',
   description: '五人战队共同报名周末锦标赛，一名辅助位选手赛前退出后，由救场悬赏完成替补与阵容交接。',
@@ -352,7 +352,7 @@ const completedGameProject: Project = {
   ],
 }
 
-const completedGameBounties: Bounty[] = [
+export const completedGameBounties: Bounty[] = [
   {
     id: 'game-find-substitute',
     projectId: GAME_PROJECT_ID,
@@ -434,14 +434,19 @@ export const showcaseBounties: Bounty[] = [
   },
 ]
 
+/**
+ * Empty workspace seed — no showcase projects/bounties.
+ * Users create promises after connecting a wallet (real-app flow).
+ * Legacy showcase fixtures above remain available for older React pages / tests.
+ */
 export function createInitialChainState(): MockChainState {
   return {
-    version: 10,
-    blockNumber: 12_345_670,
+    version: 11,
+    blockNumber: 1,
     accounts: structuredClone(demoAccounts),
     connection: { isConnected: false },
-    projects: [structuredClone(initialProject), structuredClone(travelProject), structuredClone(completedGameProject)],
-    bounties: structuredClone([...showcaseBounties, ...completedGameBounties]),
+    projects: [],
+    bounties: [],
     receipts: {},
   }
 }

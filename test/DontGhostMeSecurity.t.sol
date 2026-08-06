@@ -159,12 +159,14 @@ contract DontGhostMeSecurityTest is Test {
         vm.prank(owner);
         dgm.finishProject(projectId);
 
-        attacker.withdraw();
-
+        // Deposit is pushed during finish; reentering withdrawDeposit from receive must fail.
         assertFalse(attacker.reentrySucceeded());
         assertEq(attacker.receiveCount(), 1);
         assertEq(address(attacker).balance, deposit);
         assertEq(address(dgm).balance, 0);
+
+        vm.expectRevert("No refundable deposit");
+        attacker.withdraw();
     }
 
     function test_ApproveWork_BlocksReentrantStateChange() public {
@@ -231,6 +233,7 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(IDontGhostMe.sweepUnclaimedRescuePool.selector, DontGhostMe.sweepUnclaimedRescuePool.selector);
         assertEq(IDontGhostMe.getProject.selector, DontGhostMe.getProject.selector);
         assertEq(IDontGhostMe.getMember.selector, DontGhostMe.getMember.selector);
+        assertEq(IDontGhostMe.getProjectMembers.selector, DontGhostMe.getProjectMembers.selector);
         assertEq(IDontGhostMe.getBounty.selector, DontGhostMe.getBounty.selector);
         assertEq(IDontGhostMe.getExpulsionProposal.selector, DontGhostMe.getExpulsionProposal.selector);
         assertEq(IDontGhostMe.hasVoted.selector, DontGhostMe.hasVoted.selector);

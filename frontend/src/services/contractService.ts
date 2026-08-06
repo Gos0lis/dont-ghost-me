@@ -64,6 +64,16 @@ export interface ContractService {
 
   // —— Demo control ——
   resetDemo(): Promise<void>
+  /** Chain invitee: materialize a pending member seat from a shared link. */
+  ensureInviteSeat?(input: {
+    projectId: string
+    memberId: string
+    name: string
+    task: string
+    deposit: number
+    title: string
+    category: string
+  }): Promise<void>
 }
 
 /**

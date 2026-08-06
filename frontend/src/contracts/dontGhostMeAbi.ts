@@ -646,6 +646,25 @@ export const dontGhostMeAbi = [
   },
   {
     "type": "function",
+    "name": "getProjectMembers",
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getRequiredExpulsionBond",
     "inputs": [
       {
@@ -1717,4 +1736,4 @@ export const dontGhostMeAbi = [
     "name": "TargetNotActive",
     "inputs": []
   }
-] as const;
+] as const

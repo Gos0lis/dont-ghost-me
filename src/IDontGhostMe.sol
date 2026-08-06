@@ -228,6 +228,8 @@ interface IDontGhostMe {
 
     function getActiveMemberCount(uint256 projectId) external view returns (uint256);
 
+    function getProjectMembers(uint256 projectId) external view returns (address[] memory);
+
     function getRescuePoolSettlement(uint256 projectId) external view returns (RescuePoolSettlement memory);
 
     function hasWithdrawnRemainingRescuePool(uint256 projectId, address member) external view returns (bool);

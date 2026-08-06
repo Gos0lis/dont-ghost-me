@@ -20,6 +20,7 @@ contract DontGhostMeTest is Test {
     event ProjectCreated(uint256 indexed projectId, address indexed owner, string name, uint256 depositAmount);
     event MemberJoined(uint256 indexed projectId, address indexed member, uint256 deposit);
     event MemberLeft(uint256 indexed projectId, address indexed member, uint256 forfeitedDeposit);
+    event DepositWithdrawn(uint256 indexed projectId, address indexed member, uint256 amount);
     event BountyCreated(
         uint256 indexed bountyId, uint256 indexed projectId, address indexed creator, string description, uint256 reward
     );
@@ -138,6 +139,14 @@ contract DontGhostMeTest is Test {
         dgm.joinProject{value: DEPOSIT - 1}(projectId);
     }
 
+    function test_JoinProject_RevertsWhenDepositExceedsRequiredAmount() public {
+        uint256 projectId = _createProject();
+
+        vm.prank(alice);
+        vm.expectRevert("Incorrect deposit");
+        dgm.joinProject{value: DEPOSIT + 1}(projectId);
+    }
+
     function test_JoinProject_RevertsWhenAlreadyJoined() public {
         uint256 projectId = _createProject();
         _join(projectId, alice);
@@ -167,17 +176,17 @@ contract DontGhostMeTest is Test {
         assertEq(member.deposit, DEPOSIT);
     }
 
-    function test_FinishProject_AllowsDepositWithdraw() public {
+    function test_FinishProject_AutoRefundsDeposits() public {
         uint256 projectId = _createProject();
         _join(projectId, alice);
 
-        vm.prank(owner);
-        dgm.finishProject(projectId);
-
         uint256 balanceBefore = alice.balance;
 
-        vm.prank(alice);
-        dgm.withdrawDeposit(projectId);
+        vm.expectEmit(true, true, false, true);
+        emit DepositWithdrawn(projectId, alice, DEPOSIT);
+
+        vm.prank(owner);
+        dgm.finishProject(projectId);
 
         DontGhostMe.Member memory member = dgm.getMember(projectId, alice);
         assertFalse(member.active);
@@ -185,6 +194,12 @@ contract DontGhostMeTest is Test {
         assertEq(member.deposit, 0);
         assertEq(alice.balance, balanceBefore + DEPOSIT);
         assertEq(dgm.getActiveMemberCount(projectId), 0);
+        assertEq(dgm.getProjectMembers(projectId).length, 1);
+        assertEq(dgm.getProjectMembers(projectId)[0], alice);
+
+        vm.prank(alice);
+        vm.expectRevert("No refundable deposit");
+        dgm.withdrawDeposit(projectId);
     }
 
     function test_FinishProject_InvalidatesOpenExpulsionAndRefundsBond() public {
@@ -199,7 +214,9 @@ contract DontGhostMeTest is Test {
 
         dgm.executeExpulsion(proposalId);
         assertEq(dgm.getPendingExpulsionBondRefund(alice), bond);
-        assertTrue(dgm.getMember(projectId, carol).active);
+        // Finish already auto-refunded deposits; expulsion against a finished project should not re-activate members.
+        assertFalse(dgm.getMember(projectId, carol).active);
+        assertTrue(dgm.getMember(projectId, carol).withdrawn);
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);
@@ -214,8 +231,16 @@ contract DontGhostMeTest is Test {
         vm.prank(carol);
         dgm.leaveProject(projectId);
 
+        uint256 aliceBefore = alice.balance;
+        uint256 bobBefore = bob.balance;
+
         vm.prank(owner);
         dgm.finishProject(projectId);
+
+        // Deposits are auto-refunded on finish.
+        assertEq(alice.balance, aliceBefore + DEPOSIT);
+        assertEq(bob.balance, bobBefore + DEPOSIT);
+        assertEq(dgm.getActiveMemberCount(projectId), 0);
 
         DontGhostMe.RescuePoolSettlement memory settlement = dgm.getRescuePoolSettlement(projectId);
         assertTrue(settlement.initialized);
@@ -223,15 +248,12 @@ contract DontGhostMeTest is Test {
         assertEq(settlement.remainingAmount, DEPOSIT);
         assertEq(settlement.eligibleMembers, 2);
 
-        uint256 aliceBefore = alice.balance;
+        aliceBefore = alice.balance;
         vm.prank(alice);
         dgm.withdrawRemainingRescuePool(projectId);
         assertEq(alice.balance, aliceBefore + DEPOSIT / 2);
 
-        // Withdrawing the original deposit first must not remove settlement eligibility.
-        vm.prank(bob);
-        dgm.withdrawDeposit(projectId);
-        uint256 bobBefore = bob.balance;
+        bobBefore = bob.balance;
         vm.prank(bob);
         dgm.withdrawRemainingRescuePool(projectId);
         assertEq(bob.balance, bobBefore + DEPOSIT / 2);
@@ -251,24 +273,25 @@ contract DontGhostMeTest is Test {
         vm.prank(carol);
         dgm.leaveProject(projectId);
 
+        uint256 aliceBefore = alice.balance;
+        uint256 bobBefore = bob.balance;
+
         vm.prank(owner);
         dgm.cancelProject(projectId);
 
         assertEq(uint256(dgm.getProject(projectId).status), uint256(DontGhostMe.ProjectStatus.Cancelled));
+        assertEq(alice.balance, aliceBefore + DEPOSIT);
+        assertEq(bob.balance, bobBefore + DEPOSIT);
 
-        uint256 aliceBefore = alice.balance;
-        vm.startPrank(alice);
-        dgm.withdrawDeposit(projectId);
+        aliceBefore = alice.balance;
+        vm.prank(alice);
         dgm.withdrawRemainingRescuePool(projectId);
-        vm.stopPrank();
-        assertEq(alice.balance, aliceBefore + DEPOSIT + DEPOSIT / 2);
+        assertEq(alice.balance, aliceBefore + DEPOSIT / 2);
 
-        uint256 bobBefore = bob.balance;
-        vm.startPrank(bob);
-        dgm.withdrawDeposit(projectId);
+        bobBefore = bob.balance;
+        vm.prank(bob);
         dgm.withdrawRemainingRescuePool(projectId);
-        vm.stopPrank();
-        assertEq(bob.balance, bobBefore + DEPOSIT + DEPOSIT / 2);
+        assertEq(bob.balance, bobBefore + DEPOSIT / 2);
         assertEq(address(dgm).balance, 0);
     }
 
@@ -867,20 +890,15 @@ contract DontGhostMeTest is Test {
         dgm.submitWork(bountyId);
 
         uint256 hunterBefore = hunter.balance;
-        vm.prank(owner);
-        dgm.approveWork(bountyId);
-
-        // Remaining active members finish and withdraw.
-        vm.prank(owner);
-        dgm.finishProject(projectId);
-
         uint256 aliceBefore = alice.balance;
         uint256 bobBefore = bob.balance;
 
-        vm.prank(alice);
-        dgm.withdrawDeposit(projectId);
-        vm.prank(bob);
-        dgm.withdrawDeposit(projectId);
+        vm.prank(owner);
+        dgm.approveWork(bountyId);
+
+        // Remaining active members finish; deposits auto-refund to each wallet.
+        vm.prank(owner);
+        dgm.finishProject(projectId);
 
         assertEq(hunter.balance, hunterBefore + REWARD);
         assertEq(alice.balance, aliceBefore + DEPOSIT);

@@ -183,6 +183,29 @@ export function ticketDraftToCreateInput(
   }
 }
 
+export interface RescuePackagePreset {
+  title: string
+  summary: string
+  category: string
+  subtasks: RescueTicketDraft[]
+}
+
+/** One complete rescue package per scene (subtasks are deliverables, not solo claims). */
+export const rescuePackagePresets: Record<'hackathon' | 'travel', RescuePackagePreset> = {
+  hackathon: {
+    title: '黑客松退出后的完整补位任务',
+    summary: '一次成员退出留下的开发缺口，需按下列交付项整包完成。',
+    category: '开发 · 黑客松',
+    subtasks: rescueTicketTemplates.hackathon,
+  },
+  travel: {
+    title: '旅行退出后的完整补位任务',
+    summary: '找替补、处理门票与修改酒店，同属一次退出后的完整救场任务。',
+    category: '协调 · 朋友旅行',
+    subtasks: rescueTicketTemplates.travel,
+  },
+}
+
 export const workspaceCopy: Record<'hackathon' | 'travel', {
   eyebrow: string
   workspaceDescription: string
@@ -191,17 +214,17 @@ export const workspaceCopy: Record<'hackathon' | 'travel', {
   rescueDescription: string
 }> = {
   hackathon: {
-    eyebrow: 'MY PROMISE · 001',
-    workspaceDescription: '一张承诺卡，记下成员、任务与每一笔保证金的去向。',
+    eyebrow: 'MY PROMISE',
+    workspaceDescription: '连接钱包后，这里只显示与你相关的进行中承诺。',
     label: '黑客松项目',
-    rescueEyebrow: 'RESCUE BOARD · HACKATHON',
-    rescueDescription: '选择一张任务票，补上团队留下的开发缺口。',
+    rescueEyebrow: 'RESCUE BOARD',
+    rescueDescription: '成员退出后生成一个完整救场任务，内含多项交付，需整包领取与验收。',
   },
   travel: {
-    eyebrow: 'MY PROMISE · 002',
-    workspaceDescription: '同一张承诺卡，也可以记下旅行成员、共同费用和临时退出后的补救安排。',
+    eyebrow: 'MY PROMISE',
+    workspaceDescription: '连接钱包后，这里只显示与你相关的进行中承诺。',
     label: '朋友旅行',
-    rescueEyebrow: 'RESCUE BOARD · TRAVEL',
-    rescueDescription: '找替补、处理门票和修改酒店，每个麻烦都对应一张救场票。',
+    rescueEyebrow: 'RESCUE BOARD',
+    rescueDescription: '一次退出对应一个完整救场任务，拆成三项交付，不可单独领取。',
   },
 }

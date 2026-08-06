@@ -37,7 +37,7 @@ export interface WalletAccount {
 
 export interface WalletConnection {
   isConnected: boolean
-  connector?: 'MetaMask' | 'OKX Wallet' | 'Phantom'
+  connector?: 'MetaMask' | 'Rabby' | 'Browser Wallet'
   account?: WalletAccount
 }
 

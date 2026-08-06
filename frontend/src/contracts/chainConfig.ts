@@ -1,6 +1,7 @@
 import { defineChain } from 'viem'
+import { monadTestnet } from 'viem/chains'
 
-/** Local Anvil (default Foundry). Later swap RPC/id for Monad via env. */
+/** Local Anvil (default Foundry). */
 export const anvilChain = defineChain({
   id: 31_337,
   name: 'Anvil',
@@ -26,6 +27,22 @@ export function getConfiguredChain() {
       name,
       rpcUrls: { default: { http: [rpc] } },
       nativeCurrency: { ...anvilChain.nativeCurrency, symbol, name: symbol },
+    }
+  }
+
+  if (id === monadTestnet.id) {
+    return {
+      ...monadTestnet,
+      name: name || monadTestnet.name,
+      rpcUrls: { default: { http: [rpc || monadTestnet.rpcUrls.default.http[0]] } },
+      nativeCurrency: {
+        ...monadTestnet.nativeCurrency,
+        symbol: symbol || monadTestnet.nativeCurrency.symbol,
+        name: symbol || monadTestnet.nativeCurrency.name,
+      },
+      blockExplorers: monadTestnet.blockExplorers ?? {
+        default: { name: 'MonadVision', url: 'https://testnet.monadvision.com' },
+      },
     }
   }
 

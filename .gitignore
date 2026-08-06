@@ -1,4 +1,4 @@
-# Compiler files
+# Foundry compiler files
 cache/
 out/
 
@@ -6,20 +6,21 @@ out/
 .logs/
 .ignore/
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+# Broadcast logs (keep dry-run output out of git)
+/broadcast/
+!/.gitkeep
 
 # Docs
 docs/
 
-# Dotenv file
+# Dotenv files
 .env
 .env.*
 !.env.example
 !**/.env.example
+.env.monad
 
 # Frontend build
 frontend/dist/
 frontend/node_modules/
+frontend/.openai/

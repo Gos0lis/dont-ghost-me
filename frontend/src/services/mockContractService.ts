@@ -11,7 +11,7 @@ import type {
 } from '../contracts/types'
 import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
 
-const STORAGE_KEY = 'dont-ghost-me:mock-chain:v10'
+const STORAGE_KEY = 'dont-ghost-me:mock-chain:v11'
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -31,7 +31,7 @@ function readState(): MockChainState {
   }
   try {
     const parsed = JSON.parse(raw) as MockChainState
-    if (parsed.version !== 10) throw new Error('outdated mock state')
+    if (parsed.version !== 11) throw new Error('outdated mock state')
     return parsed
   } catch {
     const initial = createInitialChainState()
@@ -58,6 +58,12 @@ function currentAccount(state: MockChainState) {
   const account = state.connection.account
   if (!state.connection.isConnected || !account) throw new Error('请先连接钱包')
   return state.accounts.find((item) => item.id === account.id) ?? account
+}
+
+function assertProjectOwner(project: { creatorAddress: Address }, account: { address: Address }) {
+  if (project.creatorAddress.toLowerCase() !== account.address.toLowerCase()) {
+    throw new Error('只有项目发起人可以执行此操作')
+  }
 }
 
 async function writeTransaction(
@@ -228,6 +234,7 @@ export const mockContractService: ContractService = {
       const project = state.projects.find((item) => item.id === projectId)
       const member = project?.members.find((item) => item.id === memberId)
       if (!project || !member) throw new Error('成员或项目不存在')
+      if (!['active', 'active_again'].includes(project.status)) throw new Error('当前项目状态不可退出')
       if (account.role !== 'initiator' && account.id !== member.id) throw new Error('只有成员本人或项目发起人可以确认退出')
       if (member.status === 'quit') throw new Error('该成员已经退出')
       const unfinishedTask = member.task
@@ -272,24 +279,54 @@ export const mockContractService: ContractService = {
       if (account.role !== 'initiator') throw new Error('只有项目发起人可以完成项目结算')
       const project = state.projects.find((item) => item.id === projectId)
       if (!project) throw new Error('项目不存在')
+      assertProjectOwner(project, account)
       if (!['active', 'active_again'].includes(project.status)) throw new Error('当前项目状态不可结算')
-      if (project.progress < 80) throw new Error('请先确认当前项目里程碑')
       if (project.reservedBounty > 0) throw new Error('仍有未结算的救场悬赏')
-      const unlocked = project.lockedDeposit
+
+      let refunded = 0
+      project.members.forEach((member) => {
+        if (member.status === 'quit' || !member.depositLocked) return
+        const wallet = state.accounts.find(
+          (item) => item.address.toLowerCase() === member.address.toLowerCase(),
+        )
+        if (wallet) {
+          wallet.balance += member.deposit
+          if (state.connection.account?.id === wallet.id) {
+            state.connection.account.balance = wallet.balance
+          }
+        }
+        refunded += member.deposit
+        member.status = 'completed'
+        member.depositLocked = false
+      })
+
+      const remainingRescuePool = project.rescuePool
+      // Unspent rescue pool returns to the project owner in mock (aligned with owner sweep path).
+      if (remainingRescuePool > 0) {
+        const owner = state.accounts.find(
+          (item) => item.address.toLowerCase() === project.creatorAddress.toLowerCase(),
+        )
+        if (owner) {
+          owner.balance += remainingRescuePool
+          if (state.connection.account?.id === owner.id) {
+            state.connection.account.balance = owner.balance
+          }
+        }
+      }
+
       project.lockedDeposit = 0
       project.rescuePool = 0
       project.progress = 100
       project.status = 'completed'
-      project.members.forEach((member) => {
-        if (member.status !== 'quit') {
-          member.status = 'completed'
-          member.depositLocked = false
-        }
-      })
       project.timeline.push(
-        timeline('payment', '项目完成并结算', `项目交付完成，${unlocked} MON 成员保证金已解锁`, hash),
+        timeline(
+          'payment',
+          '项目完成并结算',
+          `项目交付完成，已向各成员退回 ${refunded} MON 保证金${remainingRescuePool ? `，剩余救场池 ${remainingRescuePool} MON 退回发起人` : ''}`,
+          hash,
+        ),
       )
-      return `项目已完成，${unlocked} MON 保证金已解锁`
+      return `项目已完成，已退回 ${refunded + remainingRescuePool} MON`
     })
   },
 
@@ -299,8 +336,9 @@ export const mockContractService: ContractService = {
       if (account.role !== 'initiator') throw new Error('只有项目发起人可以发起批量结算')
       const project = state.projects.find((item) => item.id === projectId)
       if (!project) throw new Error('项目不存在')
+      assertProjectOwner(project, account)
       const pendingBounties = state.bounties.filter(
-        (bounty) => bounty.projectId === projectId && bounty.status !== 'paid',
+        (bounty) => bounty.projectId === projectId && bounty.status === 'submitted',
       )
       if (pendingBounties.length === 0) throw new Error('没有待完成的救场悬赏')
       const totalReward = pendingBounties.reduce((sum, bounty) => sum + bounty.reward, 0)
@@ -335,6 +373,11 @@ export const mockContractService: ContractService = {
       const account = currentAccount(state)
       const project = state.projects.find((item) => item.id === input.projectId)
       if (!project) throw new Error('项目不存在')
+      assertProjectOwner(project, account)
+      if (!['active', 'active_again', 'rescue_needed', 'rescue_in_progress'].includes(project.status)) {
+        throw new Error('当前项目状态不可发布悬赏')
+      }
+      if (!(input.reward > 0)) throw new Error('悬赏奖励必须大于 0')
       if (project.rescuePool - project.reservedBounty < input.reward) throw new Error('救场池可用余额不足')
       const existing = state.bounties.find((item) => item.id === DEMO_BOUNTY_ID)
       const sourceMember = project.members.find((item) => item.id === input.sourceMemberId)
@@ -432,10 +475,19 @@ export const mockContractService: ContractService = {
 
   async requestRevision(bountyId, feedback) {
     return writeTransaction('requestRevision', (state, hash) => {
+      const initiator = state.accounts.find((item) => item.role === 'initiator') ?? state.accounts[0]
+      if (initiator) {
+        state.connection = {
+          isConnected: true,
+          connector: state.connection.connector ?? 'MetaMask',
+          account: clone(initiator),
+        }
+      }
       currentAccount(state)
       const bounty = state.bounties.find((item) => item.id === bountyId)
       const project = state.projects.find((item) => item.id === bounty?.projectId)
       if (!bounty || !project) throw new Error('悬赏不存在')
+      if (bounty.status !== 'submitted') throw new Error('成果尚未进入等待验收状态')
       bounty.status = 'revision_required'
       bounty.revisionFeedback = feedback
       project.timeline.push(timeline('submission', '团队要求修改成果', feedback, hash))
@@ -445,12 +497,24 @@ export const mockContractService: ContractService = {
 
   async approveAndPay(bountyId) {
     return writeTransaction('approveAndPay', (state, hash) => {
+      const initiator = state.accounts.find((item) => item.role === 'initiator') ?? state.accounts[0]
+      if (initiator) {
+        state.connection = {
+          isConnected: true,
+          connector: state.connection.connector ?? 'MetaMask',
+          account: clone(initiator),
+        }
+      }
       const account = currentAccount(state)
       if (account.role !== 'initiator') throw new Error('只有项目发起人可以验收付款')
       const bounty = state.bounties.find((item) => item.id === bountyId)
       const project = state.projects.find((item) => item.id === bounty?.projectId)
       if (!bounty || !project || !bounty.rescuerId) throw new Error('悬赏或救场者不存在')
+      assertProjectOwner(project, account)
       if (bounty.status !== 'submitted') throw new Error('成果尚未进入等待验收状态')
+      if (project.rescuePool < bounty.reward || project.reservedBounty < bounty.reward) {
+        throw new Error('救场池结算余额不足')
+      }
       const rescuer = state.accounts.find((item) => item.id === bounty.rescuerId)
       if (!rescuer) throw new Error('救场者账户不存在')
       bounty.status = 'paid'

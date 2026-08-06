@@ -89,6 +89,7 @@ contract DontGhostMe {
 
     mapping(uint256 projectId => Project project) private _projects;
     mapping(uint256 projectId => mapping(address account => Member member)) private _members;
+    mapping(uint256 projectId => address[] members) private _projectMembers;
     mapping(uint256 bountyId => Bounty bounty) private _bounties;
     mapping(uint256 proposalId => ExpulsionProposal proposal) private _expulsionProposals;
     mapping(uint256 proposalId => mapping(address voter => bool)) private _expulsionVoted;
@@ -220,27 +221,39 @@ contract DontGhostMe {
         emit ProjectCreated(projectId, msg.sender, name, depositAmount);
     }
 
-    /// @notice Marks a project as finished.
-    /// @dev Existing active members can withdraw their deposits after this call.
-    function finishProject(uint256 projectId) external projectExists(projectId) onlyProjectOwner(projectId) {
+    /// @notice Marks a project as finished and refunds locked deposits to each active member.
+    /// @dev Rescue-pool settlement is initialized before deposit refunds so eligibility stays correct.
+    function finishProject(uint256 projectId)
+        external
+        nonReentrant
+        projectExists(projectId)
+        onlyProjectOwner(projectId)
+    {
         Project storage project = _projects[projectId];
         require(project.status == ProjectStatus.Active, "Project is not active");
         require(project.reservedBounty == 0, "Project has reserved bounties");
 
         project.status = ProjectStatus.Finished;
         _initializeRescuePoolSettlement(projectId, project);
+        _refundActiveDeposits(projectId);
 
         emit ProjectFinished(projectId);
     }
 
-    /// @notice Cancels an active project and opens member deposit and rescue-pool refunds.
-    function cancelProject(uint256 projectId) external projectExists(projectId) onlyProjectOwner(projectId) {
+    /// @notice Cancels an active project, refunds deposits, and opens rescue-pool settlement.
+    function cancelProject(uint256 projectId)
+        external
+        nonReentrant
+        projectExists(projectId)
+        onlyProjectOwner(projectId)
+    {
         Project storage project = _projects[projectId];
         require(project.status == ProjectStatus.Active, "Project is not active");
         require(project.reservedBounty == 0, "Project has reserved bounties");
 
         project.status = ProjectStatus.Cancelled;
         _initializeRescuePoolSettlement(projectId, project);
+        _refundActiveDeposits(projectId);
 
         emit ProjectCancelled(projectId);
     }
@@ -253,9 +266,11 @@ contract DontGhostMe {
         require(project.status == ProjectStatus.Active, "Project is not active");
         require(member.account == address(0), "Already joined");
         require(msg.value >= project.depositAmount, "Insufficient deposit");
+        require(msg.value <= project.depositAmount, "Incorrect deposit");
 
         _members[projectId][msg.sender] =
             Member({account: msg.sender, deposit: msg.value, active: true, withdrawn: false});
+        _projectMembers[projectId].push(msg.sender);
         _activeMemberCounts[projectId] += 1;
 
         emit MemberJoined(projectId, msg.sender, msg.value);
@@ -280,6 +295,7 @@ contract DontGhostMe {
     }
 
     /// @notice Withdraws an active member's deposit after the project is finished.
+    /// @dev Prefer finish/cancel auto-refund. Kept for any edge case where a deposit remains.
     function withdrawDeposit(uint256 projectId) external nonReentrant projectExists(projectId) {
         Project storage project = _projects[projectId];
         Member storage member = _members[projectId][msg.sender];
@@ -746,6 +762,16 @@ contract DontGhostMe {
         return _activeMemberCounts[projectId];
     }
 
+    /// @notice Addresses that have joined this project (including members who later left / were expelled).
+    function getProjectMembers(uint256 projectId)
+        external
+        view
+        projectExists(projectId)
+        returns (address[] memory)
+    {
+        return _projectMembers[projectId];
+    }
+
     function getRescuePoolSettlement(uint256 projectId)
         external
         view
@@ -793,6 +819,27 @@ contract DontGhostMe {
         });
 
         emit RescuePoolSettlementCreated(projectId, project.rescuePool, eligibleMembers, claimDeadline);
+    }
+
+    /// @dev Pushes locked deposits back to every still-active member. Call after settlement init.
+    function _refundActiveDeposits(uint256 projectId) internal {
+        address[] storage members = _projectMembers[projectId];
+        for (uint256 i = 0; i < members.length; ++i) {
+            address account = members[i];
+            Member storage member = _members[projectId][account];
+            if (!member.active || member.withdrawn) continue;
+
+            uint256 amount = member.deposit;
+            member.active = false;
+            member.withdrawn = true;
+            member.deposit = 0;
+            _activeMemberCounts[projectId] -= 1;
+
+            (bool success,) = payable(account).call{value: amount}("");
+            require(success, "Deposit transfer failed");
+
+            emit DepositWithdrawn(projectId, account, amount);
+        }
     }
 
     function _calculateBps(uint256 amount, uint256 bps) internal pure returns (uint256) {

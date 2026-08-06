@@ -18,6 +18,8 @@ docs/
 .env.*
 !.env.example
 !**/.env.example
+!.env.production
+!frontend/.env.production
 .env.monad
 
 # Frontend build

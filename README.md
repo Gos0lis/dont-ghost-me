@@ -11,7 +11,7 @@
 
 > [!IMPORTANT]
 > 前端支持三种后端：`mock`（本地演示）、`local`（Anvil）、`chain`（Monad Testnet + MetaMask / Rabby）。
-> 当前 Monad Testnet 合约：[`0xfb6478291f1592b09aced7c8814e4c33a0b94e80`](https://testnet.monadvision.com/address/0xfb6478291f1592b09aced7c8814e4c33a0b94e80)。
+> 当前 Monad Testnet 合约：[`0x9f9577bb9244a933ce71f03cabdc3bf325a93b69`](https://testnet.monadvision.com/address/0x9f9577bb9244a933ce71f03cabdc3bf325a93b69)。
 > 线上 / `vite build` 默认读取 [`frontend/.env.production`](./frontend/.env.production)（chain 模式）；私钥只放本地 `.env.monad`，不要提交。
 > 请勿向 Demo / 测试网钱包发送主网资产。
 

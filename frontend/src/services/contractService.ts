@@ -3,6 +3,7 @@ import type {
   Bounty,
   CreateBountyInput,
   CreateProjectInput,
+  ExpulsionProposal,
   Hash,
   Project,
   TransactionReceipt,
@@ -54,16 +55,27 @@ export interface ContractService {
   requestRevision(bountyId: string, feedback: string): Promise<TransactionResponse>
   approveAndPay(bountyId: string): Promise<TransactionResponse>
 
+  // —— Chain governance writes ——
+  proposeExpulsion?(projectId: string, target: Address, reason: string): Promise<TransactionResponse>
+  voteExpulsion?(proposalId: string, support: boolean): Promise<TransactionResponse>
+  executeExpulsion?(proposalId: string): Promise<TransactionResponse>
+
   // —— Chain reads ——
   getProject(projectId: string): Promise<Project | undefined>
   getProjects(): Promise<Project[]>
   getBounty(bountyId: string): Promise<Bounty | undefined>
   getBounties(): Promise<Bounty[]>
   getWalletBalance(address?: Address): Promise<number>
+  getActiveExpulsionProposal?(projectId: string, target: Address): Promise<ExpulsionProposal | undefined>
+  hasVotedExpulsion?(proposalId: string, voter?: Address): Promise<boolean>
   getTransactionReceipt(hash: Hash): Promise<TransactionReceipt>
 
   // —— Demo control ——
   resetDemo(): Promise<void>
+  /** Mock-only: load a three-member project for testing the governance UI. */
+  loadGovernanceDemo?(): Promise<void>
+  /** Mock-only: apply a passed expulsion vote to project/member balances. */
+  executeMockExpulsion?(projectId: string, memberId: string): Promise<TransactionResponse>
   /** Chain invitee: materialize a pending member seat from a shared link. */
   ensureInviteSeat?(input: {
     projectId: string

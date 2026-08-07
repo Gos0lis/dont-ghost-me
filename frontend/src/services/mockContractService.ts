@@ -9,7 +9,11 @@ import type {
   TimelineEvent,
   TransactionResponse,
 } from '../contracts/types'
-import { createInitialChainState, DEMO_BOUNTY_ID } from '../data/mockData'
+import {
+  createInitialChainState,
+  DEMO_BOUNTY_ID,
+  governanceDemoProject,
+} from '../data/mockData'
 
 const STORAGE_KEY = 'dont-ghost-me:mock-chain:v11'
 
@@ -571,6 +575,42 @@ export const mockContractService: ContractService = {
     const receipt = readState().receipts[hash]
     if (!receipt) throw new Error('找不到交易回执')
     return clone(receipt)
+  },
+
+  async loadGovernanceDemo() {
+    const state = readState()
+    state.projects = [
+      clone(governanceDemoProject),
+      ...state.projects.filter((project) => project.id !== governanceDemoProject.id),
+    ]
+    const account = state.accounts.find((item) => item.id === 'caro') ?? state.accounts[0]
+    state.connection = { isConnected: true, connector: 'MetaMask', account: clone(account) }
+    writeState(state)
+    await wait(150)
+  },
+
+  async executeMockExpulsion(projectId, memberId) {
+    return writeTransaction('executeExpulsion', (state, hash) => {
+      const project = state.projects.find((item) => item.id === projectId)
+      const member = project?.members.find((item) => item.id === memberId)
+      if (!project || !member) throw new Error('成员或项目不存在')
+      if (member.status !== 'active' || !member.depositLocked) throw new Error('该成员已不在活跃名单中')
+
+      member.status = 'quit'
+      member.depositLocked = false
+      project.lockedDeposit -= member.deposit
+      project.rescuePool += member.deposit
+      project.status = 'rescue_needed'
+      project.timeline.push(
+        timeline(
+          'warning',
+          `${member.name} 经投票被移除`,
+          `严格过半同意，${member.deposit} MON 保证金已进入救场池`,
+          hash,
+        ),
+      )
+      return `${member.name} 已被移除，${member.deposit} MON 已进入救场池`
+    })
   },
 
   async resetDemo() {

@@ -4,6 +4,7 @@ export const DEMO_PROJECT_ID = 'monad-hackathon'
 export const DEMO_BOUNTY_ID = 'smart-contract-mvp'
 export const TRAVEL_PROJECT_ID = 'five-friends-trip'
 export const GAME_PROJECT_ID = 'weekend-squad-cup'
+export const GOVERNANCE_DEMO_PROJECT_ID = 'mock-governance-vote'
 
 export const demoAccounts: WalletAccount[] = [
   {
@@ -118,6 +119,74 @@ export const initialProject: Project = {
       title: '全员确认，项目开始',
       description: '5 名成员确认任务并锁定共 380 MON 保证金',
       timestamp: '2026-07-24T10:35:00.000Z',
+    },
+  ],
+}
+
+export const governanceDemoProject: Project = {
+  id: GOVERNANCE_DEMO_PROJECT_ID,
+  name: '三人黑客松履约小队',
+  description: '用于演示成员长期不交付时，团队如何发起投票、形成多数并执行移除。',
+  category: 'Mock 投票演示',
+  goal: '验证三人团队的移除成员投票闭环',
+  creatorAddress: demoAccounts[0].address,
+  startDate: '2026-08-07',
+  deadline: '2026-08-10',
+  status: 'active',
+  progress: 42,
+  totalDeposit: 300,
+  lockedDeposit: 300,
+  rescuePool: 0,
+  reservedBounty: 0,
+  members: [
+    {
+      id: 'caro',
+      name: 'Caro',
+      address: demoAccounts[0].address,
+      role: '发起人与产品统筹',
+      task: '完成产品流程与前端演示',
+      taskDeadline: '2026-08-09',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'yunn',
+      name: 'Yunn',
+      address: demoAccounts[1].address,
+      role: '智能合约开发',
+      task: '连续两次未提交合约进展',
+      taskDeadline: '2026-08-08',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+    {
+      id: 'builder-07',
+      name: 'Builder 07',
+      address: demoAccounts[2].address,
+      role: '测试与交付',
+      task: '完成测试记录与最终验收',
+      taskDeadline: '2026-08-09',
+      deposit: 100,
+      depositLocked: true,
+      status: 'active',
+    },
+  ],
+  timeline: [
+    {
+      id: 'governance-demo-created',
+      type: 'project',
+      title: '三人承诺已生效',
+      description: 'Caro、Yunn、Builder 07 已锁定共 300 MON 保证金',
+      timestamp: '2026-08-07T09:00:00.000Z',
+    },
+    {
+      id: 'governance-demo-warning',
+      type: 'warning',
+      title: '成员进展异常',
+      description: 'Yunn 连续两次未提交进展，团队可以发起移除投票',
+      timestamp: '2026-08-07T15:30:00.000Z',
     },
   ],
 }

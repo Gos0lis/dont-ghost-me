@@ -61,6 +61,7 @@ contract DontGhostMe {
         uint256 deadline;
         uint256 bondAmount;
         bool executed;
+        string reason;
     }
 
     struct RescuePoolSettlement {
@@ -132,6 +133,7 @@ contract DontGhostMe {
         address target,
         uint256 bondAmount
     );
+    event ExpulsionReasonRecorded(uint256 indexed proposalId, string reason);
     event ExpulsionVoted(uint256 indexed proposalId, address indexed voter, bool support);
     event MemberExpelled(uint256 indexed projectId, address indexed member, uint256 forfeitedDeposit);
     event ExpulsionFinalized(uint256 indexed proposalId, bool passed, uint256 refundedBond, uint256 slashedBond);
@@ -162,6 +164,7 @@ contract DontGhostMe {
     error OnlyProtocolAdmin();
     error InvalidBountyTransition();
     error EmptyReviewReason();
+    error EmptyExpulsionReason();
     error BountyReviewPeriodActive();
     error BountyClaimPeriodActive();
     error RescuePoolSettlementUnavailable();
@@ -513,6 +516,25 @@ contract DontGhostMe {
         projectExists(projectId)
         returns (uint256 proposalId)
     {
+        return _proposeExpulsion(projectId, target, "");
+    }
+
+    /// @notice Starts an expulsion vote and records a public, human-readable reason.
+    /// @dev Kept separate from proposeExpulsion for backwards ABI compatibility.
+    function proposeExpulsionWithReason(uint256 projectId, address target, string calldata reason)
+        external
+        payable
+        projectExists(projectId)
+        returns (uint256 proposalId)
+    {
+        if (bytes(reason).length == 0) revert EmptyExpulsionReason();
+        return _proposeExpulsion(projectId, target, reason);
+    }
+
+    function _proposeExpulsion(uint256 projectId, address target, string memory reason)
+        internal
+        returns (uint256 proposalId)
+    {
         Project storage project = _projects[projectId];
 
         require(project.status == ProjectStatus.Active, "Project is not active");
@@ -548,7 +570,8 @@ contract DontGhostMe {
             rejectVotes: 0,
             deadline: block.timestamp + EXPULSION_VOTING_PERIOD,
             bondAmount: requiredBond,
-            executed: false
+            executed: false,
+            reason: reason
         });
 
         _activeExpulsionByTarget[projectId][target] = proposalId;
@@ -557,6 +580,7 @@ contract DontGhostMe {
         _expulsionProposalCounts[projectId] += 1;
 
         emit ExpulsionProposed(proposalId, projectId, msg.sender, target, requiredBond);
+        if (bytes(reason).length != 0) emit ExpulsionReasonRecorded(proposalId, reason);
     }
 
     /// @notice Allows the protocol admin to approve additional proposals for a project.
@@ -738,6 +762,24 @@ contract DontGhostMe {
         return _expulsionProposals[proposalId];
     }
 
+    function getActiveExpulsionProposalByTarget(uint256 projectId, address target)
+        external
+        view
+        projectExists(projectId)
+        returns (uint256)
+    {
+        return _activeExpulsionByTarget[projectId][target];
+    }
+
+    function getActiveExpulsionProposalByProposer(uint256 projectId, address proposer)
+        external
+        view
+        projectExists(projectId)
+        returns (uint256)
+    {
+        return _activeExpulsionByProposer[projectId][proposer];
+    }
+
     function hasVoted(uint256 proposalId, address voter) external view expulsionExists(proposalId) returns (bool) {
         return _expulsionVoted[proposalId][voter];
     }
@@ -763,12 +805,7 @@ contract DontGhostMe {
     }
 
     /// @notice Addresses that have joined this project (including members who later left / were expelled).
-    function getProjectMembers(uint256 projectId)
-        external
-        view
-        projectExists(projectId)
-        returns (address[] memory)
-    {
+    function getProjectMembers(uint256 projectId) external view projectExists(projectId) returns (address[] memory) {
         return _projectMembers[projectId];
     }
 

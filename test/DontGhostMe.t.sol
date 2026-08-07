@@ -32,6 +32,7 @@ contract DontGhostMeTest is Test {
         address target,
         uint256 bondAmount
     );
+    event ExpulsionReasonRecorded(uint256 indexed proposalId, string reason);
     event ExpulsionVoted(uint256 indexed proposalId, address indexed voter, bool support);
     event MemberExpelled(uint256 indexed projectId, address indexed member, uint256 forfeitedDeposit);
 
@@ -589,6 +590,34 @@ contract DontGhostMeTest is Test {
         assertEq(proposal.deadline, block.timestamp + dgm.EXPULSION_VOTING_PERIOD());
         assertEq(proposal.bondAmount, bond);
         assertFalse(proposal.executed);
+        assertEq(proposal.reason, "");
+    }
+
+    function test_ProposeExpulsionWithReason_StoresReasonAndActiveIndexes() public {
+        uint256 projectId = _createProject();
+        _seedThreeMembers(projectId);
+        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
+
+        vm.expectEmit(true, false, false, true);
+        emit ExpulsionReasonRecorded(1, "Missed two delivery checkpoints");
+        vm.prank(alice);
+        uint256 proposalId =
+            dgm.proposeExpulsionWithReason{value: bond}(projectId, carol, "Missed two delivery checkpoints");
+
+        DontGhostMe.ExpulsionProposal memory proposal = dgm.getExpulsionProposal(proposalId);
+        assertEq(proposal.reason, "Missed two delivery checkpoints");
+        assertEq(dgm.getActiveExpulsionProposalByTarget(projectId, carol), proposalId);
+        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, alice), proposalId);
+    }
+
+    function test_ProposeExpulsionWithReason_RevertsWhenReasonEmpty() public {
+        uint256 projectId = _createProject();
+        _seedThreeMembers(projectId);
+        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
+
+        vm.prank(alice);
+        vm.expectRevert(DontGhostMe.EmptyExpulsionReason.selector);
+        dgm.proposeExpulsionWithReason{value: bond}(projectId, carol, "");
     }
 
     function test_ProposeExpulsion_RevertsWithFewerThanThreeMembers() public {
@@ -773,6 +802,8 @@ contract DontGhostMeTest is Test {
         assertEq(project.rescuePool, DEPOSIT);
         assertEq(dgm.getActiveMemberCount(projectId), 2);
         assertEq(dgm.getPendingExpulsionBondRefund(alice), proposal.bondAmount);
+        assertEq(dgm.getActiveExpulsionProposalByTarget(projectId, carol), 0);
+        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, alice), 0);
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);

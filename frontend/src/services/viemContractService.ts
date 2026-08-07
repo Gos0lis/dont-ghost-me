@@ -20,6 +20,7 @@ import type {
   BountyStatus,
   CreateBountyInput,
   CreateProjectInput,
+  ExpulsionProposal,
   Hash,
   Project,
   ProjectMember,
@@ -174,6 +175,34 @@ function toDisplayMon(wei: bigint): number {
 function toWei(amount: number): bigint {
   // UI uses whole MON-like units; map 1 → 1 ether for Anvil/Monad-native demos.
   return parseEther(String(amount))
+}
+
+type ChainExpulsionProposal = {
+  id: bigint
+  projectId: bigint
+  target: Address
+  proposer: Address
+  approveVotes: bigint
+  rejectVotes: bigint
+  deadline: bigint
+  bondAmount: bigint
+  executed: boolean
+  reason: string
+}
+
+function mapExpulsionProposal(raw: ChainExpulsionProposal): ExpulsionProposal {
+  return {
+    id: String(raw.id),
+    projectId: String(raw.projectId),
+    target: raw.target,
+    proposer: raw.proposer,
+    approveVotes: Number(raw.approveVotes),
+    rejectVotes: Number(raw.rejectVotes),
+    deadline: Number(raw.deadline),
+    bondAmount: toDisplayMon(raw.bondAmount),
+    executed: raw.executed,
+    reason: raw.reason,
+  }
 }
 
 /** Map Solidity ProjectStatus (Active/Finished/Cancelled) to UI status. */
@@ -358,6 +387,13 @@ function formatContractError(error: unknown, fallback = '链上交易失败'): s
   if (/Project is not active/i.test(text)) return '该承诺已结束，无法再次结算'
   if (/reserved bounties/i.test(text)) return '仍有未结清的救场悬赏，请先完成验收'
   if (/User rejected|user denied|rejected the request/i.test(text)) return '已取消钱包签名'
+  if (/OnlyActiveMember/i.test(text)) return '只有当前活跃成员可以发起或参与投票'
+  if (/InsufficientActiveMembers/i.test(text)) return '至少需要 3 名活跃成员才能发起移除投票'
+  if (/TargetHasOpenProposal|ProposerHasOpenProposal/i.test(text)) return '已有一项相关移除投票正在进行'
+  if (/ExpulsionVotingActive/i.test(text)) return '投票期尚未结束，暂时不能执行结果'
+  if (/ExpulsionVotingEnded/i.test(text)) return '投票已经结束，请执行投票结果'
+  if (/ExpulsionAlreadyVoted/i.test(text)) return '当前钱包已经投过票'
+  if (/IncorrectExpulsionBond/i.test(text)) return '发起投票所需的提案保证金不正确'
 
   const reason =
     text.match(/reverted with the following reason:\s*\n?\s*(.+)/i)?.[1]?.trim() ||
@@ -1174,6 +1210,38 @@ export const viemContractService: ContractService = {
     return { hash, status: 'pending' }
   },
 
+  async proposeExpulsion(projectId, target, reason) {
+    const bond = await getPublic().readContract({
+      address: getAddress(),
+      abi: dontGhostMeAbi,
+      functionName: 'getRequiredExpulsionBond',
+      args: [BigInt(projectId)],
+    })
+    const { hash } = await writeContract(
+      'proposeExpulsion',
+      currentAccountId(),
+      'proposeExpulsionWithReason',
+      [BigInt(projectId), target, reason],
+      bond,
+    )
+    return { hash, status: 'pending' }
+  },
+
+  async voteExpulsion(proposalId, support) {
+    const { hash } = await writeContract('voteExpulsion', currentAccountId(), 'voteExpulsion', [
+      BigInt(proposalId),
+      support,
+    ])
+    return { hash, status: 'pending' }
+  },
+
+  async executeExpulsion(proposalId) {
+    const { hash } = await writeContract('executeExpulsion', currentAccountId(), 'executeExpulsion', [
+      BigInt(proposalId),
+    ])
+    return { hash, status: 'pending' }
+  },
+
   async getProject(projectId) {
     await syncIndexesFromEvents()
     return readChainProject(projectId)
@@ -1211,6 +1279,34 @@ export const viemContractService: ContractService = {
     if (!target) return 0
     const balance = await getPublic().getBalance({ address: target })
     return toDisplayMon(balance)
+  },
+
+  async getActiveExpulsionProposal(projectId, target) {
+    const proposalId = await getPublic().readContract({
+      address: getAddress(),
+      abi: dontGhostMeAbi,
+      functionName: 'getActiveExpulsionProposalByTarget',
+      args: [BigInt(projectId), target],
+    })
+    if (proposalId === 0n) return undefined
+    const raw = await getPublic().readContract({
+      address: getAddress(),
+      abi: dontGhostMeAbi,
+      functionName: 'getExpulsionProposal',
+      args: [proposalId],
+    })
+    return mapExpulsionProposal(raw as ChainExpulsionProposal)
+  },
+
+  async hasVotedExpulsion(proposalId, voter) {
+    const address = voter ?? readSession().account?.address
+    if (!address) return false
+    return getPublic().readContract({
+      address: getAddress(),
+      abi: dontGhostMeAbi,
+      functionName: 'hasVoted',
+      args: [BigInt(proposalId), address],
+    })
   },
 
   async getTransactionReceipt(hash) {

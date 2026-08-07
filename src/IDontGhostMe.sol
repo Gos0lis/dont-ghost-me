@@ -60,6 +60,7 @@ interface IDontGhostMe {
         uint256 deadline;
         uint256 bondAmount;
         bool executed;
+        string reason;
     }
 
     struct RescuePoolSettlement {
@@ -95,6 +96,7 @@ interface IDontGhostMe {
         address target,
         uint256 bondAmount
     );
+    event ExpulsionReasonRecorded(uint256 indexed proposalId, string reason);
     event ExpulsionVoted(uint256 indexed proposalId, address indexed voter, bool support);
     event MemberExpelled(uint256 indexed projectId, address indexed member, uint256 forfeitedDeposit);
     event ExpulsionFinalized(uint256 indexed proposalId, bool passed, uint256 refundedBond, uint256 slashedBond);
@@ -125,6 +127,7 @@ interface IDontGhostMe {
     error OnlyProtocolAdmin();
     error InvalidBountyTransition();
     error EmptyReviewReason();
+    error EmptyExpulsionReason();
     error BountyReviewPeriodActive();
     error BountyClaimPeriodActive();
     error RescuePoolSettlementUnavailable();
@@ -195,6 +198,10 @@ interface IDontGhostMe {
     function cancelStaleBounty(uint256 bountyId) external;
 
     function proposeExpulsion(uint256 projectId, address target) external payable returns (uint256 proposalId);
+    function proposeExpulsionWithReason(uint256 projectId, address target, string calldata reason)
+        external
+        payable
+        returns (uint256 proposalId);
 
     function approveAdditionalExpulsions(uint256 projectId, uint256 additionalLimit) external;
 
@@ -215,6 +222,8 @@ interface IDontGhostMe {
     function getBounty(uint256 bountyId) external view returns (Bounty memory);
 
     function getExpulsionProposal(uint256 proposalId) external view returns (ExpulsionProposal memory);
+    function getActiveExpulsionProposalByTarget(uint256 projectId, address target) external view returns (uint256);
+    function getActiveExpulsionProposalByProposer(uint256 projectId, address proposer) external view returns (uint256);
 
     function hasVoted(uint256 proposalId, address voter) external view returns (bool);
 

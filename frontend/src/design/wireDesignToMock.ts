@@ -121,6 +121,28 @@ function shortAddress(address?: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function isGovernanceActiveMember(member: Project['members'][number]) {
+  return member.status === 'active' && member.depositLocked
+}
+
+type DemoExpulsionVote = {
+  projectId: string
+  targetId: string
+  targetName: string
+  reason: string
+  eligibleMembers: number
+  votesByAddress: Record<string, 'approve' | 'reject'>
+}
+
 /**
  * Bind the V11 design DOM to designBackend.
  * Multi-page routes are driven by React Router via navigate/getPath.
@@ -171,6 +193,8 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
   let snapshot: DesignSnapshot | null = null
   let busy = false
   let activeRescuePackageId: string | null = null
+  let activeGovernanceTargetId: string | null = null
+  let demoExpulsionVote: DemoExpulsionVote | null = null
   let toastTimer = 0
 
   const intro = $('#intro')
@@ -183,10 +207,13 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
   const confirmFlowModal = $('#confirmFlowModal')
   const exitFlowModal = $('#exitFlowModal')
   const rescueFlowModal = $('#rescueFlowModal')
+  const governanceModal = $('#governanceModal')
   const ticketList = $('#ticketList')
   const memberList = $('#memberList')
   const confirmMemberList = $('#confirmMemberList')
   const exitMemberOptions = $('#exitMemberOptions')
+  const governanceMemberList = $('#governanceMemberList')
+  const governanceVoteSlip = $('#governanceVoteSlip')
   const commitmentEmpty = $('#commitmentEmpty')
   const commitmentWorkbench = $('#commitmentWorkbench')
   const rescueEmpty = $('#rescueEmpty')
@@ -337,7 +364,8 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       !walletConnectModal?.classList.contains('is-open') &&
       !confirmFlowModal?.classList.contains('is-open') &&
       !exitFlowModal?.classList.contains('is-open') &&
-      !rescueFlowModal?.classList.contains('is-open')
+      !rescueFlowModal?.classList.contains('is-open') &&
+      !governanceModal?.classList.contains('is-open')
     ) {
       document.body.classList.remove('modal-open')
     }
@@ -353,6 +381,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     }
     if (exitFlowModal?.classList.contains('is-open')) closeModal(exitFlowModal)
     if (rescueFlowModal?.classList.contains('is-open')) closeModal(rescueFlowModal)
+    if (governanceModal?.classList.contains('is-open')) closeModal(governanceModal)
   }
   document.addEventListener('keydown', onKeyDown)
 
@@ -616,6 +645,121 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     }
   }
 
+  const renderGovernance = (project: Project) => {
+    if (!governanceMemberList || !governanceVoteSlip || !snapshot) return
+
+    const walletAddress = snapshot.wallet.account?.address
+    const activeMembers = project.members.filter(isGovernanceActiveMember)
+    const chainVote = snapshot.governance?.projectId === project.id ? snapshot.governance : null
+    const demoVote = demoExpulsionVote?.projectId === project.id ? demoExpulsionVote : null
+    const hasOpenVote = Boolean(chainVote || demoVote)
+    const canOpenProposal =
+      designBackend.isActiveProjectStatus(project.status) && activeMembers.length >= 3 && !hasOpenVote
+    const boardDescription = $('#governanceBoardDescription')
+    if (boardDescription) {
+      boardDescription.textContent =
+        activeMembers.length < 3
+          ? `当前仅 ${activeMembers.length} 名成员完成确认并锁定保证金；至少需要 3 名活跃成员才能发起投票。`
+          : hasOpenVote
+            ? '已有一项移除投票进行中，结束前不能重复发起。'
+            : '有人长期不履约时，由成员共同决定是否移除。'
+    }
+
+    governanceMemberList.innerHTML = project.members
+      .map((member) => {
+        const isOwner = addressesMatch(member.address, project.creatorAddress)
+        const isSelf = addressesMatch(member.address, walletAddress)
+        const isActive = isGovernanceActiveMember(member)
+        const canTarget = isActive && !isOwner && !isSelf && canOpenProposal
+        const avatar = escapeHtml(member.name.trim().slice(0, 1).toUpperCase() || '·')
+        const status =
+          member.status === 'quit'
+            ? '已退出'
+            : member.status === 'completed'
+              ? '已完成'
+              : member.depositLocked || member.status === 'active'
+                ? '履约中'
+                : '待确认'
+        const action = canTarget
+          ? `<button class="governance-member-action" type="button" data-governance-target="${escapeHtml(member.id)}">发起移除投票</button>`
+          : `<em class="governance-member-state${isOwner ? ' is-owner' : ''}">${isOwner ? '发起人' : isSelf ? '我' : status}</em>`
+        return `
+          <article class="governance-member-card${member.status === 'quit' ? ' is-inactive' : ''}">
+            <i class="governance-member-avatar" aria-hidden="true">${avatar}</i>
+            <span class="governance-member-copy">
+              <strong>${escapeHtml(member.name)}</strong>
+              <small>${escapeHtml(member.task || member.role)}</small>
+            </span>
+            ${action}
+          </article>`
+      })
+      .join('')
+
+    const vote = chainVote ?? demoVote
+    governanceVoteSlip.hidden = !vote
+    if (!vote) return
+
+    const setVoteText = (selector: string, value: string) => {
+      const node = $(selector)
+      if (node) node.textContent = value
+    }
+    setVoteText('#governanceVoteTarget', vote.targetName)
+    setVoteText('#governanceVoteReason', `“${vote.reason}”`)
+    const votes = demoVote ? Object.values(demoVote.votesByAddress) : []
+    const approveVotes = chainVote
+      ? chainVote.approveVotes
+      : votes.filter((item) => item === 'approve').length
+    const rejectVotes = chainVote
+      ? chainVote.rejectVotes
+      : votes.filter((item) => item === 'reject').length
+    const currentVote = chainVote
+      ? chainVote.hasCurrentWalletVoted
+        ? 'submitted'
+        : undefined
+      : walletAddress && demoVote
+        ? demoVote.votesByAddress[walletAddress.toLowerCase()]
+        : undefined
+    const passed = approveVotes > vote.eligibleMembers / 2
+    setVoteText('#governanceApproveCount', String(approveVotes))
+    setVoteText('#governanceRejectCount', String(rejectVotes))
+
+    const castVotes = approveVotes + rejectVotes
+    const progress = $('#governanceVoteProgress') as HTMLElement | null
+    if (progress) progress.style.width = `${Math.min(100, (castVotes / vote.eligibleMembers) * 100)}%`
+
+    const hint = $('#governanceVoteHint')
+    if (hint) {
+      hint.textContent = passed
+        ? chainVote && Date.now() < chainVote.deadline * 1000
+          ? `已获得 ${approveVotes}/${vote.eligibleMembers} 票同意，达到严格过半；需等到 ${new Date(chainVote.deadline * 1000).toLocaleString('zh-CN')} 后执行。`
+          : `已获得 ${approveVotes}/${vote.eligibleMembers} 票同意，达到严格过半，可以执行移除。`
+        : currentVote
+          ? chainVote
+            ? `你已经投过票。投票将于 ${new Date(chainVote.deadline * 1000).toLocaleString('zh-CN')} 截止。`
+            : `你已投${currentVote === 'approve' ? '同意' : '反对'}票，可切换演示账户继续测试。`
+          : chainVote
+            ? `每位活跃成员只能投一票；提案保证金 ${chainVote.bondAmount} ${unit()}，截止后才能执行结果。`
+            : '每位活跃成员只能投一票，Mock 可点击右上角钱包切换成员。'
+    }
+    governanceVoteSlip.querySelectorAll<HTMLButtonElement>('[data-governance-vote]').forEach((button) => {
+      button.disabled = Boolean(currentVote)
+    })
+    const execute = $('#governanceExecute') as HTMLButtonElement | null
+    if (execute) {
+      const votingEnded = chainVote ? Date.now() >= chainVote.deadline * 1000 : passed
+      const isOwner = addressesMatch(walletAddress, project.creatorAddress)
+      execute.hidden = chainVote ? !votingEnded : !passed
+      execute.disabled = chainVote ? !isOwner : false
+      execute.textContent = chainVote
+        ? !isOwner
+          ? '请由承诺发起人执行结果'
+          : passed
+            ? '执行移除并发布救场任务'
+            : '结算未通过的投票'
+        : '执行移除结果'
+    }
+  }
+
   const renderWorkspace = () => {
     if (!snapshot) return
     renderWallet()
@@ -623,6 +767,8 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     renderPromiseLists()
 
     const connected = snapshot.wallet.isConnected
+    const governanceDemoLoader = $('#governanceDemoLoader') as HTMLButtonElement | null
+    if (governanceDemoLoader) governanceDemoLoader.hidden = getChainMode() !== 'mock'
     const commitment = $('#commitment')
     if (commitment) commitment.dataset.scene = snapshot.activeScene
 
@@ -660,6 +806,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     setText('#projectSummary', project.description)
     setText('#projectMemberCount', `${project.members.length} 人`)
     setText('#projectDeposit', `${project.members[0]?.deposit ?? 0} ${unit()}`)
+    renderGovernance(project)
 
     const live = snapshot
     const projectPackages = designBackend.listRescuePackagesForProject(live, project.id)
@@ -759,6 +906,209 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     renderProfile()
     syncRoute()
   }
+
+  const openGovernanceProposal = (memberId: string) => {
+    if (!snapshot) return
+    const project = designBackend.getActiveProject(snapshot)
+    const target = project?.members.find((member) => member.id === memberId)
+    if (!project || !target) return
+
+    activeGovernanceTargetId = memberId
+    const avatar = target.name.trim().slice(0, 1).toUpperCase() || '·'
+    const deposit = target.deposit || project.members[0]?.deposit || 0
+    const bond = Math.max(deposit * 0.1, 0)
+    const values: Record<string, string> = {
+      '#governanceTargetAvatar': avatar,
+      '#governanceTargetName': target.name,
+      '#governanceTargetTask': target.task || target.role,
+      '#governanceBondAmount': `${Number(bond.toFixed(4))} ${unit()}`,
+      '#governanceTargetDeposit': `${deposit} ${unit()}`,
+    }
+    Object.entries(values).forEach(([selector, value]) => {
+      const node = $(selector)
+      if (node) node.textContent = value
+    })
+    const reason = $('#governanceReason') as HTMLTextAreaElement | null
+    if (reason) reason.value = ''
+    openModal(governanceModal)
+    trackTimeout(() => reason?.focus(), 180)
+  }
+
+  governanceMemberList?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest(
+      '[data-governance-target]',
+    ) as HTMLButtonElement | null
+    if (!button?.dataset.governanceTarget) return
+    openGovernanceProposal(button.dataset.governanceTarget)
+  })
+
+  ;['#governanceBackdrop', '#governanceClose', '#governanceCancel'].forEach((selector) => {
+    $(selector)?.addEventListener('click', () => closeModal(governanceModal))
+  })
+
+  $('#governanceSubmit')?.addEventListener('click', () => {
+    if (!snapshot || !activeGovernanceTargetId) return
+    const project = designBackend.getActiveProject(snapshot)
+    const target = project?.members.find((member) => member.id === activeGovernanceTargetId)
+    const reasonField = $('#governanceReason') as HTMLTextAreaElement | null
+    const reason = reasonField?.value.trim() ?? ''
+    if (!project || !target) return
+    if (!isGovernanceActiveMember(target)) {
+      showToast('该成员尚未完成确认并锁定保证金，不能发起移除投票')
+      closeModal(governanceModal)
+      renderGovernance(project)
+      return
+    }
+    if (reason.length < 6) {
+      showToast('请写明可核实的履约事实，至少 6 个字')
+      reasonField?.focus()
+      return
+    }
+
+    if (getChainMode() !== 'mock') {
+      closeModal(governanceModal)
+      void run('发起移除投票', () =>
+        designBackend.proposeExpulsion(project.id, target.id, reason),
+      ).then((result) => {
+        if (!result) return
+        activeGovernanceTargetId = null
+        showToast(`已发起关于 ${target.name} 的链上移除投票`)
+      })
+      return
+    }
+
+    const eligibleMembers = project.members.filter(isGovernanceActiveMember).length
+    demoExpulsionVote = {
+      projectId: project.id,
+      targetId: target.id,
+      targetName: target.name,
+      reason,
+      eligibleMembers: Math.max(eligibleMembers, 1),
+      votesByAddress: {},
+    }
+    closeModal(governanceModal)
+    renderGovernance(project)
+    showToast(`已发起关于 ${target.name} 的移除投票 · 展示状态未上链`)
+  })
+
+  governanceVoteSlip?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest(
+      '[data-governance-vote]',
+    ) as HTMLButtonElement | null
+    if (!button || !snapshot?.wallet.account?.address) return
+    const support = button.dataset.governanceVote === 'approve'
+    if (getChainMode() !== 'mock') {
+      const proposal = snapshot.governance
+      if (!proposal || proposal.hasCurrentWalletVoted) return
+      void run(support ? '投同意票' : '投反对票', () =>
+        designBackend.voteExpulsion(proposal.proposalId, support),
+      ).then((result) => {
+        if (result) showToast(support ? '同意票已上链' : '反对票已上链')
+      })
+      return
+    }
+    if (!demoExpulsionVote) return
+    const voterAddress = snapshot.wallet.account.address.toLowerCase()
+    if (demoExpulsionVote.votesByAddress[voterAddress]) return
+    const project = designBackend.getActiveProject(snapshot)
+    const isActiveMember = project?.members.some(
+      (member) =>
+        addressesMatch(member.address, snapshot?.wallet.account?.address) &&
+        isGovernanceActiveMember(member),
+    )
+    if (!isActiveMember) {
+      showToast('当前演示账户不是该承诺的活跃成员，不能投票')
+      return
+    }
+    const vote = button.dataset.governanceVote === 'approve' ? 'approve' : 'reject'
+    demoExpulsionVote.votesByAddress[voterAddress] = vote
+    if (project) renderGovernance(project)
+    showToast(vote === 'approve' ? '已投同意移除 · 展示状态未上链' : '已投不同意移除 · 展示状态未上链')
+  })
+
+  $('#governanceDemoLoader')?.addEventListener('click', () => {
+    demoExpulsionVote = null
+    activeGovernanceTargetId = null
+    void run('载入投票演示', () => designBackend.loadGovernanceDemo()).then((result) => {
+      if (!result) return
+      promiseTab = 'active'
+      renderWorkspace()
+      showToast('三人投票演示已就绪 · Caro / Builder 07 / Yunn 可轮流投票')
+    })
+  })
+
+  $('#governanceExecute')?.addEventListener('click', () => {
+    if (getChainMode() !== 'mock') {
+      const vote = snapshot?.governance
+      const project = snapshot ? designBackend.getActiveProject(snapshot) : undefined
+      if (!vote || !project) return
+      const passed = vote.approveVotes > vote.eligibleMembers / 2
+      if (Date.now() < vote.deadline * 1000) {
+        showToast('投票期尚未结束')
+        return
+      }
+      if (!addressesMatch(snapshot?.wallet.account?.address, project.creatorAddress)) {
+        showToast('请切换到承诺发起人的钱包执行结果')
+        return
+      }
+      void (async () => {
+        const executed = await run('执行投票结果', () =>
+          designBackend.executeExpulsion(vote.proposalId),
+        )
+        if (!executed) return
+        if (!passed) {
+          showToast('投票未通过，结果已结算')
+          return
+        }
+        const scene = sceneFromProject(project)
+        const published = await run('发布遗留救场任务', () =>
+          designBackend.spawnTicketsForRemovedMember(vote.projectId, vote.targetId, scene),
+        )
+        if (!published) {
+          showToast('成员已移除，但救场出票失败；请由发起人稍后重试')
+          return
+        }
+        showToast(`${vote.targetName} 已被移除 · 救场任务已发布到大厅`)
+      })()
+      return
+    }
+    if (!demoExpulsionVote || !snapshot) return
+    const vote = demoExpulsionVote
+    const project = designBackend.getActiveProject(snapshot)
+    const target = project?.members.find((member) => member.id === vote.targetId)
+    if (!project || !target || !isGovernanceActiveMember(target)) {
+      demoExpulsionVote = null
+      if (project) renderGovernance(project)
+      showToast('这项投票已失效：目标成员不是当前活跃成员，请重新发起')
+      return
+    }
+    const approveVotes = Object.values(vote.votesByAddress).filter((item) => item === 'approve').length
+    if (approveVotes <= vote.eligibleMembers / 2) {
+      showToast('同意票还没有严格过半')
+      return
+    }
+    void (async () => {
+      const removed = await run('执行移除', () =>
+        designBackend.executeMockExpulsion(vote.projectId, vote.targetId),
+      )
+      if (!removed) return
+
+      const removedProject = removed.projects.find((item) => item.id === vote.projectId)
+      const scene = removedProject ? sceneFromProject(removedProject) : removed.activeScene
+      const published = await run('发布遗留救场任务', () =>
+        designBackend.spawnTicketsForRemovedMember(vote.projectId, vote.targetId, scene),
+      )
+      if (!published) {
+        showToast(`${vote.targetName} 已移除，但救场出票失败；可重新载入 Mock 场景后再试`)
+        return
+      }
+
+      demoExpulsionVote = null
+      activeGovernanceTargetId = null
+      renderWorkspace()
+      showToast(`${vote.targetName} 已被移除 · 救场任务已发布到大厅`)
+    })()
+  })
 
   const syncTimelineClasses = (project: Project) => {
     const signed = project.members.filter((m) => m.depositLocked || m.status === 'active').length

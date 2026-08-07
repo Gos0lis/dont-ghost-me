@@ -81,6 +81,20 @@ export interface Project {
   timeline: TimelineEvent[]
 }
 
+export interface ExpulsionProposal {
+  id: string
+  projectId: string
+  target: Address
+  proposer: Address
+  approveVotes: number
+  rejectVotes: number
+  /** Unix timestamp in seconds. */
+  deadline: number
+  bondAmount: number
+  executed: boolean
+  reason: string
+}
+
 export interface WorkSubmission {
   githubUrl: string
   demoUrl: string

@@ -352,6 +352,7 @@ symbol .pigeon-eye {
 
 .app {
   min-height: 100vh;
+  min-height: 100dvh;
   opacity: 0;
   transform: translateY(10px);
   transition: opacity 0.65s ease, transform 0.65s ease;
@@ -1481,6 +1482,37 @@ main {
   color: var(--cream);
 }
 
+.governance-demo-loader {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin: -8px 0 18px;
+  padding: 7px 10px;
+  border: 1px dashed var(--blue-deep);
+  color: var(--ink);
+  background: rgba(233, 243, 245, 0.72);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.governance-demo-loader[hidden] {
+  display: none !important;
+}
+
+.governance-demo-loader span {
+  color: var(--blue-deep);
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.governance-demo-loader:hover {
+  background: var(--paper-blue);
+  transform: translateY(-1px);
+}
+
 .promise-project-list {
   display: grid;
   gap: 12px;
@@ -1999,6 +2031,665 @@ footer small {
   font-family: var(--font-display);
   font-size: 10px;
   letter-spacing: 0.12em;
+}
+
+/* —— Team governance / member-expulsion voting —— */
+.governance-board {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1.5px dashed rgba(45, 62, 89, 0.28);
+}
+
+.governance-board-heading {
+  display: flex;
+  gap: 24px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.governance-board-heading span,
+.governance-dialog-heading > span,
+.governance-paper-label,
+.governance-rules-note > span,
+.governance-vote-copy > span {
+  color: var(--blue-deep);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.governance-board-heading h4 {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.governance-board-heading p {
+  max-width: 28ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: right;
+}
+
+.governance-member-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.governance-member-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 11px;
+  border: 1px dashed rgba(45, 62, 89, 0.3);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.governance-member-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1.5px solid var(--ink);
+  border-radius: 42% 58% 48% 52%;
+  background: var(--paper-blue);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+  transform: rotate(-2deg);
+}
+
+.governance-member-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.governance-member-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-member-copy small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-member-state {
+  color: var(--blue-deep);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.governance-member-state.is-owner {
+  padding: 2px 5px;
+  border: 1px solid rgba(45, 62, 89, 0.32);
+  transform: rotate(1deg);
+}
+
+.governance-member-action {
+  padding: 5px 7px;
+  border: 0;
+  border-bottom: 1px dashed var(--ink);
+  color: var(--ink-soft);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.governance-member-action:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.governance-member-action:active {
+  transform: translateY(1px);
+}
+
+.governance-vote-slip[hidden] {
+  display: none !important;
+}
+
+.governance-vote-slip {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 13px 20px;
+  margin-top: 14px;
+  padding: 20px 22px 17px;
+  border: 1.5px solid var(--ink);
+  background:
+    linear-gradient(rgba(254, 253, 248, 0.92), rgba(254, 253, 248, 0.92)),
+    repeating-linear-gradient(0deg, transparent, transparent 5px, rgba(45, 62, 89, 0.06) 6px),
+    var(--butter);
+  box-shadow: 5px 6px 0 var(--powder);
+}
+
+.governance-vote-stamp {
+  position: absolute;
+  top: 15px;
+  right: 18px;
+  display: grid;
+  width: 51px;
+  height: 51px;
+  place-items: center;
+  border: 2px solid var(--blue-deep);
+  border-radius: 50%;
+  color: var(--blue-deep);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  transform: rotate(9deg);
+}
+
+.governance-vote-copy {
+  padding-right: 60px;
+}
+
+.governance-vote-copy h5 {
+  margin: 4px 0 3px;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.governance-vote-copy h5 strong {
+  color: var(--blue-deep);
+}
+
+.governance-vote-copy p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.governance-vote-counts {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  padding-right: 57px;
+}
+
+.governance-vote-counts div {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.governance-vote-counts span {
+  color: var(--ink-soft);
+  font-size: 8px;
+}
+
+.governance-vote-counts strong {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.governance-vote-progress {
+  grid-column: 1 / -1;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(45, 62, 89, 0.25);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.governance-vote-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--blue-deep);
+  transition: width 0.35s ease;
+}
+
+.governance-vote-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.governance-vote-actions button,
+.governance-dialog-actions button {
+  min-height: 35px;
+  padding: 7px 12px;
+  border: 1.5px solid var(--ink);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.governance-reject-button,
+.governance-cancel {
+  background: var(--cream);
+}
+
+.governance-approve-button,
+.governance-submit,
+.governance-execute-button {
+  color: var(--cream);
+  background: var(--ink);
+  box-shadow: 3px 3px 0 var(--powder);
+}
+
+.governance-execute-button {
+  border-color: var(--blue-deep) !important;
+  background: var(--blue-deep);
+}
+
+.governance-execute-button[hidden] {
+  display: none !important;
+}
+
+.governance-vote-actions button:hover,
+.governance-dialog-actions button:hover {
+  transform: translateY(-1px);
+}
+
+.governance-vote-actions button:active,
+.governance-dialog-actions button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.governance-vote-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+  transform: none;
+}
+
+.governance-vote-slip > small {
+  align-self: center;
+  color: var(--ink-soft);
+  font-size: 8px;
+  text-align: right;
+}
+
+.governance-modal {
+  position: fixed;
+  z-index: 930;
+  inset: 0;
+  display: grid;
+  visibility: hidden;
+  padding: 24px;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease, visibility 0.24s ease;
+}
+
+.governance-modal.is-open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.governance-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(45, 62, 89, 0.32);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.governance-dialog {
+  position: relative;
+  width: min(960px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border: 1.5px solid var(--ink);
+  background:
+    linear-gradient(rgba(254, 253, 248, 0.97), rgba(254, 253, 248, 0.97)),
+    repeating-linear-gradient(0deg, transparent, transparent 5px, rgba(45, 62, 89, 0.035) 6px);
+  box-shadow: 10px 12px 0 var(--powder);
+  transform: translateY(18px) rotate(-0.2deg);
+  transition: transform 0.28s ease;
+}
+
+.governance-modal.is-open .governance-dialog {
+  transform: translateY(0) rotate(-0.2deg);
+}
+
+.governance-close {
+  position: absolute;
+  z-index: 2;
+  top: 15px;
+  right: 17px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 1px dashed var(--ink);
+  border-radius: 50%;
+  background: var(--cream);
+  font-size: 21px;
+  cursor: pointer;
+}
+
+.governance-dialog-heading {
+  padding: 34px 68px 22px 36px;
+  border-bottom: 1px dashed rgba(45, 62, 89, 0.28);
+}
+
+.governance-dialog-heading h2 {
+  margin: 5px 0 4px;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.2;
+}
+
+.governance-dialog-heading p {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.governance-dialog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 22px;
+  padding: 25px 36px 28px;
+}
+
+.governance-target-paper {
+  padding: 23px 24px 22px;
+  border: 1.5px solid var(--ink);
+  background: var(--cream);
+  box-shadow: 5px 6px 0 var(--powder);
+}
+
+.governance-target-person {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+  margin: 12px 0 21px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed rgba(45, 62, 89, 0.28);
+}
+
+.governance-target-person > i {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 1.5px solid var(--ink);
+  border-radius: 45% 55% 48% 52%;
+  background: var(--paper-blue);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-style: normal;
+  transform: rotate(-3deg);
+}
+
+.governance-target-person div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.governance-target-person strong {
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.governance-target-person small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-target-person em {
+  padding: 4px 7px;
+  border: 1px solid var(--blue-deep);
+  color: var(--blue-deep);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  transform: rotate(2deg);
+}
+
+.governance-reason-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.governance-reason-field > span {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.governance-reason-field textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  padding: 12px 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+  background: rgba(233, 243, 245, 0.4);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.governance-reason-field textarea:focus {
+  outline: 3px solid var(--butter);
+  outline-offset: 2px;
+}
+
+.governance-reason-field small {
+  margin-top: 7px;
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.governance-rules-note {
+  position: relative;
+  padding: 23px 21px 20px;
+  border: 1px dashed var(--ink);
+  background: var(--paper-blue);
+  transform: rotate(0.5deg);
+}
+
+.governance-rules-note::before {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 78px;
+  height: 18px;
+  background: rgba(245, 230, 168, 0.75);
+  content: "";
+  transform: translateX(-50%) rotate(-2deg);
+}
+
+.governance-rules-note ol {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.governance-rules-note li {
+  display: grid;
+  grid-template-columns: 25px 1fr;
+  gap: 8px;
+}
+
+.governance-rules-note li b {
+  font-family: var(--font-display);
+  font-size: 11px;
+}
+
+.governance-rules-note li p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.governance-consequence {
+  padding: 14px;
+  border: 1.5px solid var(--ink);
+  background: var(--cream);
+  text-align: center;
+}
+
+.governance-consequence span,
+.governance-consequence small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 8px;
+}
+
+.governance-consequence strong {
+  display: block;
+  margin: 3px 0;
+  font-family: var(--font-display);
+  font-size: 23px;
+}
+
+.governance-dialog-actions {
+  display: flex;
+  min-height: 72px;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 14px 36px;
+  border-top: 1px dashed rgba(45, 62, 89, 0.28);
+  background: rgba(233, 243, 245, 0.52);
+}
+
+@media (max-width: 820px) {
+  .governance-member-list {
+    grid-template-columns: 1fr;
+  }
+
+  .governance-modal {
+    padding: 0;
+  }
+
+  .governance-dialog {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    box-shadow: none;
+    transform: translateY(24px);
+  }
+
+  .governance-modal.is-open .governance-dialog {
+    transform: translateY(0);
+  }
+
+  .governance-dialog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .governance-dialog-actions {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 620px) {
+  .governance-board-heading {
+    display: block;
+  }
+
+  .governance-board-heading p {
+    margin-top: 6px;
+    text-align: left;
+  }
+
+  .governance-vote-slip {
+    grid-template-columns: 1fr;
+    padding: 18px 17px 15px;
+  }
+
+  .governance-vote-counts {
+    padding-right: 0;
+  }
+
+  .governance-vote-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .governance-vote-slip > small {
+    text-align: left;
+  }
+
+  .governance-dialog-heading {
+    padding: 34px 54px 19px 16px;
+  }
+
+  .governance-dialog-heading h2 {
+    font-size: 28px;
+  }
+
+  .governance-dialog-layout {
+    padding: 19px 16px 24px;
+  }
+
+  .governance-target-paper {
+    padding: 20px 16px;
+  }
+
+  .governance-target-person {
+    grid-template-columns: 45px minmax(0, 1fr);
+  }
+
+  .governance-target-person > i {
+    width: 45px;
+    height: 45px;
+  }
+
+  .governance-target-person em {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .governance-dialog-actions {
+    display: grid;
+    grid-template-columns: 0.78fr 1.22fr;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .governance-dialog-actions button {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
 }
 
 /* 创建承诺：给开发队友看的可交互设计稿 */
@@ -4062,7 +4753,14 @@ body.design-busy .primary-button {
 
 @media (max-width: 820px) {
   body {
-    padding-bottom: 96px;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Keep the final footer copy above the floating navigation. Body padding
+     alone only extends the scroll area and does not reserve space inside the
+     footer, which allowed the last two lines to sit underneath the dock. */
+  footer {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
   }
 
   .topbar {
@@ -4129,7 +4827,7 @@ body.design-busy .primary-button {
     position: fixed;
     z-index: 70;
     right: 14px;
-    bottom: 14px;
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
     left: 14px;
     display: grid;
     grid-template-columns: repeat(4, 1fr);

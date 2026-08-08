@@ -213,6 +213,9 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(IDontGhostMe.cancelProject.selector, DontGhostMe.cancelProject.selector);
         assertEq(IDontGhostMe.joinProject.selector, DontGhostMe.joinProject.selector);
         assertEq(IDontGhostMe.leaveProject.selector, DontGhostMe.leaveProject.selector);
+        assertEq(
+            IDontGhostMe.leaveAndCreateRescueBounty.selector, DontGhostMe.leaveAndCreateRescueBounty.selector
+        );
         assertEq(IDontGhostMe.withdrawDeposit.selector, DontGhostMe.withdrawDeposit.selector);
         assertEq(IDontGhostMe.createBounty.selector, DontGhostMe.createBounty.selector);
         assertEq(IDontGhostMe.claimBounty.selector, DontGhostMe.claimBounty.selector);

@@ -160,12 +160,15 @@ function packageStatus(bounties: Bounty[]): Bounty['status'] {
 }
 
 /** Fit preset subtask rewards into the available rescue pool (last item takes remainder). */
-function scaleRescueSubtasks(templates: RescueTicketDraft[], availablePool: number): RescueTicketDraft[] {
+export function scaleRescueSubtasks(
+  templates: RescueTicketDraft[],
+  availablePool: number,
+): RescueTicketDraft[] {
   if (templates.length === 0) return []
   if (!(availablePool > 0)) throw new Error('救场池为空，无法出票')
 
   const ticketTotal = templates.reduce((sum, ticket) => sum + ticket.reward, 0)
-  if (ticketTotal > 0 && ticketTotal <= availablePool) {
+  if (ticketTotal > 0 && ticketTotal <= availablePool + 1e-12) {
     return templates.map((ticket) => ({ ...ticket }))
   }
 
@@ -173,25 +176,29 @@ function scaleRescueSubtasks(templates: RescueTicketDraft[], availablePool: numb
     return [{ ...templates[0], reward: availablePool }]
   }
 
-  let allocated = 0
+  // Work in micro-units (1e-6 MON) so fractional deposits like 0.5 split cleanly
+  // and the sum never exceeds the on-chain rescue pool.
+  const poolUnits = Math.max(1, Math.round(availablePool * 1e6))
+  if (poolUnits < templates.length) {
+    // Too small to give every subtask a positive amount — collapse to one bounty.
+    return [{ ...templates[0], reward: availablePool }]
+  }
+
+  let allocatedUnits = 0
   return templates.map((ticket, index) => {
-    if (index === templates.length - 1) {
-      const reward = Math.max(1, availablePool - allocated)
-      return { ...ticket, reward }
+    const remainingSlots = templates.length - 1 - index
+    if (remainingSlots === 0) {
+      return { ...ticket, reward: (poolUnits - allocatedUnits) / 1e6 }
     }
-    const share =
+    const rawUnits =
       ticketTotal > 0
-        ? Math.floor((ticket.reward / ticketTotal) * availablePool)
-        : Math.floor(availablePool / templates.length)
-    const reward = Math.max(1, share)
-    allocated += reward
-    if (allocated >= availablePool) {
-      allocated -= reward
-      const capped = Math.max(1, availablePool - allocated - (templates.length - 1 - index))
-      allocated += capped
-      return { ...ticket, reward: capped }
-    }
-    return { ...ticket, reward }
+        ? Math.floor((ticket.reward / ticketTotal) * poolUnits)
+        : Math.floor(poolUnits / templates.length)
+    // Leave at least 1 micro-unit for each later ticket.
+    const maxUnits = poolUnits - allocatedUnits - remainingSlots
+    const units = Math.max(1, Math.min(rawUnits, maxUnits))
+    allocatedUnits += units
+    return { ...ticket, reward: units / 1e6 }
   })
 }
 
@@ -240,7 +247,7 @@ export const designBackend = {
 
     // Drop packages whose on-chain bounties are gone (e.g. Anvil restarted but localStorage remained).
     const bountyIdSet = new Set(bounties.map((bounty) => bounty.id))
-    const livePackages = meta.rescuePackages.filter((pkg) =>
+    let livePackages = meta.rescuePackages.filter((pkg) =>
       pkg.bountyIds.some((id) => bountyIdSet.has(id)),
     )
     let metaDirty = false
@@ -252,6 +259,53 @@ export const designBackend = {
       )
       metaDirty = true
     }
+
+    // Reconstruct packages from on-chain bounties so other browsers see the rescue hall.
+    const coveredBountyIds = new Set(livePackages.flatMap((pkg) => pkg.bountyIds))
+    const orphanBounties = bounties.filter((bounty) => !coveredBountyIds.has(bounty.id))
+    if (orphanBounties.length > 0) {
+      const byProject = new Map<string, typeof orphanBounties>()
+      for (const bounty of orphanBounties) {
+        const list = byProject.get(bounty.projectId) ?? []
+        list.push(bounty)
+        byProject.set(bounty.projectId, list)
+      }
+      for (const [projectId, projectBounties] of byProject) {
+        const project = projects.find((item) => item.id === projectId)
+        const scene = project ? sceneFromProject(project) : meta.activeScene
+        const preset = rescuePackagePresets[scene]
+        for (const bounty of projectBounties) {
+          const packageId = `rescue-pkg-chain-${projectId}-${bounty.id}`
+          livePackages = [
+            {
+              id: packageId,
+              projectId,
+              scene,
+              title: bounty.title || preset.title,
+              summary: bounty.description || preset.summary,
+              category: preset.category,
+              bountyIds: [bounty.id],
+              sourceMemberId: bounty.sourceMemberId || '',
+              createdAt: bounty.deadline || new Date().toISOString(),
+            },
+            ...livePackages,
+          ]
+          if (!meta.ticketMeta[bounty.id]) {
+            meta.ticketMeta[bounty.id] = {
+              ...preset.subtasks[0],
+              title: bounty.title || preset.title,
+              category: preset.category,
+              summary: bounty.description || preset.summary,
+              copy: bounty.description || preset.summary,
+              reward: bounty.reward,
+            }
+          }
+        }
+      }
+      meta.rescuePackages = livePackages
+      metaDirty = true
+    }
+
     if (activeProjectId !== meta.activeProjectId || activeScene !== meta.activeScene) {
       meta.activeProjectId = activeProjectId
       meta.activeScene = activeScene
@@ -458,6 +512,56 @@ export const designBackend = {
     return this.hydrate()
   },
 
+  /** Compact roster payload so invitees reconstruct the same member list as the creator. */
+  encodeInviteRoster(
+    members: Array<{ id: string; name: string; task: string; deposit: number }>,
+  ): string {
+    const payload = members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      task: member.task,
+      deposit: member.deposit,
+    }))
+    const bytes = new TextEncoder().encode(JSON.stringify(payload))
+    let binary = ''
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte)
+    })
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  },
+
+  decodeInviteRoster(raw: string | null | undefined): Array<{
+    id: string
+    name: string
+    task: string
+    deposit: number
+  }> | undefined {
+    if (!raw) return undefined
+    try {
+      const padded = raw.replace(/-/g, '+').replace(/_/g, '/')
+      const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4))
+      const binary = atob(padded + pad)
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Array<{
+        id?: string
+        name?: string
+        task?: string
+        deposit?: number
+      }>
+      if (!Array.isArray(parsed)) return undefined
+      return parsed
+        .filter((item) => typeof item?.id === 'string' && item.id.length > 0)
+        .map((item) => ({
+          id: item.id!,
+          name: item.name || '成员',
+          task: item.task || '待分配任务',
+          deposit: Number(item.deposit) || 0,
+        }))
+    } catch {
+      return undefined
+    }
+  },
+
   /** Build a shareable join link for a pending member seat (chain mode). */
   buildMemberInviteLink(project: Project, memberId: string): string {
     const member = project.members.find((item) => item.id === memberId)
@@ -470,6 +574,7 @@ export const designBackend = {
     url.searchParams.set('deposit', String(member.deposit))
     url.searchParams.set('title', project.name)
     url.searchParams.set('category', project.category)
+    url.searchParams.set('roster', this.encodeInviteRoster(project.members))
     return url.toString()
   },
 
@@ -482,6 +587,7 @@ export const designBackend = {
     deposit: number
     title: string
     category: string
+    roster?: Array<{ id: string; name: string; task: string; deposit: number }>
   }): Promise<DesignSnapshot> {
     if (getChainMode() !== 'chain') {
       throw new Error('邀请链接仅在 Monad 公链模式下使用')
@@ -504,8 +610,9 @@ export const designBackend = {
   },
 
   /**
-   * Quit a member and spawn one rescue package (multiple subtask bounties under one parent).
-   * Subtask rewards are scaled to fit the available rescue pool when presets exceed it.
+   * Quit a member and spawn one rescue package.
+   * Chain: the quitting member signs one leaveAndCreateRescueBounty tx (no owner minting).
+   * Mock/local: leave then create scaled subtask bounties (owner demo accounts).
    */
   async quitAndSpawnTickets(
     projectId: string,
@@ -514,23 +621,94 @@ export const designBackend = {
   ): Promise<DesignSnapshot> {
     const projectBefore = await contractService.getProject(projectId)
     const quitting = projectBefore?.members.find((item) => item.id === memberId)
-    if (!quitting || (quitting.status !== 'active' && !quitting.depositLocked)) {
+    if (!quitting) throw new Error('成员不存在')
+
+    const alreadyQuit = quitting.status === 'quit'
+    const canQuit = quitting.status === 'active' || quitting.depositLocked
+    if (!alreadyQuit && !canQuit) {
       throw new Error('只能退出已加入并锁定保证金的成员')
     }
 
-    await runTx(() => contractService.quitProject(projectId, memberId))
-    // Owner must create bounties
-    await ensureWallet('caro')
+    const wallet = await contractService.getWalletConnection()
+    if (!wallet.isConnected || !wallet.account) throw new Error('请先连接钱包')
 
     const packagePreset = rescuePackagePresets[scene]
+    const description = `${packagePreset.title}\n\n${packagePreset.summary}\n交付项：${packagePreset.subtasks
+      .map((item, index) => `${index + 1}. ${item.title}`)
+      .join('；')}`
+
+    // —— Chain: member self-service, one transaction ——
+    if (getChainMode() === 'chain') {
+      if (alreadyQuit) {
+        // Older leave without bounty, or package meta missing — rebuild from chain.
+        return this.hydrate()
+      }
+      if (!addressesMatch(quitting.address, wallet.account.address)) {
+        throw new Error('请切换到该成员自己的钱包后再申请退出（每位成员自行退出并自动出票）')
+      }
+      if (!contractService.leaveAndCreateRescueBounty) {
+        throw new Error('当前合约不支持成员自助退出出票，请重新部署合约')
+      }
+
+      const tx = await contractService.leaveAndCreateRescueBounty(projectId, description)
+      await waitReceipt(tx.hash)
+
+      const bountyId =
+        tx.bountyId ||
+        (await contractService.getBounties()).find(
+          (bounty) => bounty.projectId === projectId && bounty.status === 'open',
+        )?.id
+      if (!bountyId) throw new Error('退出已上链，但未找到救场悬赏，请刷新救场大厅')
+
+      const meta = readMeta()
+      const packageId = `rescue-pkg-${projectId}-${bountyId}`
+      meta.ticketMeta[bountyId] = {
+        ...packagePreset.subtasks[0],
+        title: packagePreset.title,
+        category: packagePreset.category,
+        summary: packagePreset.summary,
+        copy: description,
+        reward: quitting.deposit,
+      }
+      const pkg: RescuePackageMeta = {
+        id: packageId,
+        projectId,
+        scene,
+        title: packagePreset.title,
+        summary: packagePreset.summary,
+        category: packagePreset.category,
+        bountyIds: [bountyId],
+        sourceMemberId: memberId,
+        createdAt: new Date().toISOString(),
+      }
+      const existingIndex = meta.rescuePackages.findIndex(
+        (item) => item.id === packageId || item.bountyIds.includes(bountyId),
+      )
+      if (existingIndex >= 0) meta.rescuePackages[existingIndex] = pkg
+      else meta.rescuePackages.unshift(pkg)
+      meta.activeScene = scene
+      meta.activeProjectId = projectId
+      meta.sceneProjectIds[scene] = projectId
+      writeMeta(meta)
+      return this.hydrate()
+    }
+
+    // —— Mock / local Anvil multi-ticket demo ——
+    if (!alreadyQuit) {
+      await runTx(() => contractService.quitProject(projectId, memberId))
+    }
+    await ensureWallet('caro')
+
     const projectAfterQuit = await contractService.getProject(projectId)
     if (!projectAfterQuit) throw new Error('退出后无法读取项目')
 
     const availablePool = projectAfterQuit.rescuePool - projectAfterQuit.reservedBounty
-    if (!(availablePool > 0)) throw new Error('救场池为空，无法出票')
+    if (!(availablePool > 0)) {
+      if (alreadyQuit) return this.hydrate()
+      throw new Error('救场池为空，无法出票')
+    }
 
     const templates = scaleRescueSubtasks(packagePreset.subtasks, availablePool)
-
     const meta = readMeta()
     const bountyIds: string[] = []
     const packageId = `rescue-pkg-${Date.now()}`
@@ -559,7 +737,6 @@ export const designBackend = {
           contractService.createBounty(ticketDraftToCreateInput(projectId, memberId, ticket)),
         )
         completed += 1
-        // Prefer the bounty id remembered by the chain service (avoids full event rescan each loop).
         const allBounties = await contractService.getBounties()
         const created =
           allBounties.find(
@@ -572,8 +749,6 @@ export const designBackend = {
         if (created) {
           meta.ticketMeta[created.id] = ticket
           bountyIds.push(created.id)
-          // Each bounty is an independent on-chain transaction. Persist immediately
-          // so a later failure never leaves an unreachable reserved bounty.
           persistRescuePackage()
         }
       }
@@ -586,7 +761,6 @@ export const designBackend = {
     }
 
     persistRescuePackage()
-
     meta.activeScene = scene
     meta.activeProjectId = projectId
     meta.sceneProjectIds[scene] = projectId
@@ -657,19 +831,6 @@ export const designBackend = {
     return this.hydrate()
   },
 
-  async requestPackageRevision(packageId: string, reason = '请按全部交付项补充材料后再提交') {
-    await ensureWallet('caro')
-    const pkg = this.getRescuePackage(packageId)
-    if (!pkg) throw new Error('救场任务不存在')
-    const bounties = await contractService.getBounties()
-    const targets = pkg.bountyIds.filter((id) => bounties.find((item) => item.id === id)?.status === 'submitted')
-    if (targets.length === 0) throw new Error('没有待验收的子项')
-    for (const bountyId of targets) {
-      await runTx(() => contractService.requestRevision(bountyId, reason))
-    }
-    return this.hydrate()
-  },
-
   async approveAndPay(bountyId: string) {
     await ensureWallet('caro')
     await runTx(() => contractService.approveAndPay(bountyId))
@@ -677,14 +838,43 @@ export const designBackend = {
   },
 
   async approveRescuePackage(packageId: string) {
-    await ensureWallet('caro')
     const pkg = this.getRescuePackage(packageId)
     if (!pkg) throw new Error('救场任务不存在')
+    const project = await contractService.getProject(pkg.projectId)
+    const wallet = await contractService.getWalletConnection()
+    if (
+      getChainMode() !== 'mock' &&
+      !addressesMatch(project?.creatorAddress, wallet.account?.address)
+    ) {
+      throw new Error('只有承诺创建者可以验收并支付救场奖励，请切换到创建者钱包')
+    }
+    await ensureWallet('caro')
     const bounties = await contractService.getBounties()
     const targets = pkg.bountyIds.filter((id) => bounties.find((item) => item.id === id)?.status === 'submitted')
     if (targets.length === 0) throw new Error('没有待验收的子项')
     for (const bountyId of targets) {
       await runTx(() => contractService.approveAndPay(bountyId))
+    }
+    return this.hydrate()
+  },
+
+  async requestPackageRevision(packageId: string, reason = '请按全部交付项补充材料后再提交') {
+    const pkg = this.getRescuePackage(packageId)
+    if (!pkg) throw new Error('救场任务不存在')
+    const project = await contractService.getProject(pkg.projectId)
+    const wallet = await contractService.getWalletConnection()
+    if (
+      getChainMode() !== 'mock' &&
+      !addressesMatch(project?.creatorAddress, wallet.account?.address)
+    ) {
+      throw new Error('只有承诺创建者可以要求返修，请切换到创建者钱包')
+    }
+    await ensureWallet('caro')
+    const bounties = await contractService.getBounties()
+    const targets = pkg.bountyIds.filter((id) => bounties.find((item) => item.id === id)?.status === 'submitted')
+    if (targets.length === 0) throw new Error('没有待验收的子项')
+    for (const bountyId of targets) {
+      await runTx(() => contractService.requestRevision(bountyId, reason))
     }
     return this.hydrate()
   },
@@ -762,12 +952,16 @@ export const designBackend = {
 
   listRescuePackages(
     snapshot: DesignSnapshot,
-    scope: 'open' | 'mine' | 'done' | 'all' = 'all',
+    scope: 'open' | 'mine' | 'done' | 'review' | 'all' = 'all',
   ): RescuePackageMeta[] {
     const account = snapshot.wallet.account
     return snapshot.rescuePackages.filter((pkg) => {
       const status = this.getPackageStatus(snapshot, pkg.id)
       const bounties = this.getPackageBounties(snapshot, pkg.id)
+      const project = snapshot.projects.find((item) => item.id === pkg.projectId)
+      const isCreator = Boolean(
+        account && project && addressesMatch(project.creatorAddress, account.address),
+      )
       const isMine = Boolean(
         account &&
           bounties.some(
@@ -778,10 +972,19 @@ export const designBackend = {
           ),
       )
       if (scope === 'open') return status === 'open'
+      if (scope === 'review') {
+        return isCreator && (status === 'submitted' || status === 'revision_required')
+      }
       if (scope === 'mine') return isMine && status !== 'open' && status !== 'paid' && status !== 'cancelled'
       if (scope === 'done') return ['paid', 'approved', 'rejected', 'cancelled'].includes(status)
       return true
     })
+  },
+
+  /** Packages for a project that the connected creator needs to review / pay. */
+  listPackagesAwaitingCreatorReview(snapshot: DesignSnapshot, projectId?: string): RescuePackageMeta[] {
+    const id = projectId ?? snapshot.activeProjectId
+    return this.listRescuePackages(snapshot, 'review').filter((pkg) => pkg.projectId === id)
   },
 
   getProfileSummary(snapshot: DesignSnapshot) {
@@ -789,11 +992,13 @@ export const designBackend = {
     const doneProjects = this.listMyProjects(snapshot, 'done')
     const openRescue = this.listRescuePackages(snapshot, 'open')
     const mineRescue = this.listRescuePackages(snapshot, 'mine')
+    const reviewRescue = this.listRescuePackages(snapshot, 'review')
     return {
       activeProjectCount: activeProjects.length,
       doneProjectCount: doneProjects.length,
       openRescueCount: openRescue.length,
       mineRescueCount: mineRescue.length,
+      reviewRescueCount: reviewRescue.length,
     }
   },
 
@@ -804,12 +1009,12 @@ export const designBackend = {
     return this.hydrate()
   },
 
-  findQuitCandidate(project: Project): ProjectMember | undefined {
-    const joined = project.members.filter(
-      (member) =>
-        member.status !== 'quit' && (member.status === 'active' || member.depositLocked),
-    )
+  findQuitCandidate(project: Project, wallet?: WalletConnection): ProjectMember | undefined {
+    const joined = this.listExitFlowMembers(project, wallet)
     if (joined.length === 0) return undefined
+    if (getChainMode() === 'chain' && wallet?.account) {
+      return joined.find((member) => addressesMatch(member.address, wallet.account?.address)) ?? joined[0]
+    }
     return (
       joined.find(
         (member) =>
@@ -828,11 +1033,36 @@ export const designBackend = {
   },
 
   /** Members who can call leaveProject (joined / deposit locked). */
-  listQuittableMembers(project: Project): ProjectMember[] {
-    return project.members.filter(
+  listQuittableMembers(project: Project, wallet?: WalletConnection): ProjectMember[] {
+    const joined = project.members.filter(
       (member) =>
         member.status !== 'quit' && (member.status === 'active' || member.depositLocked),
     )
+    // Chain: each wallet can only exit itself — no admin proxy quit.
+    if (getChainMode() === 'chain') {
+      if (!wallet?.account) return []
+      return joined.filter((member) => addressesMatch(member.address, wallet.account?.address))
+    }
+    return joined
+  },
+
+  /**
+   * Quit already landed but rescue tickets were not fully minted (pool still free).
+   * Mock/local only — chain publishes the bounty inside leaveAndCreateRescueBounty.
+   */
+  listMembersNeedingRescueTickets(project: Project): ProjectMember[] {
+    if (getChainMode() === 'chain') return []
+    const available = project.rescuePool - project.reservedBounty
+    if (!(available > 0)) return []
+    return project.members.filter((member) => member.status === 'quit')
+  },
+
+  /** Quittable members + quit members that still need ticket minting. */
+  listExitFlowMembers(project: Project, wallet?: WalletConnection): ProjectMember[] {
+    const quittable = this.listQuittableMembers(project, wallet)
+    const pendingTickets = this.listMembersNeedingRescueTickets(project)
+    const seen = new Set(quittable.map((member) => member.id))
+    return [...quittable, ...pendingTickets.filter((member) => !seen.has(member.id))]
   },
 
   /** True when every non-quit member has joined (demo gate before exit → rescue). */

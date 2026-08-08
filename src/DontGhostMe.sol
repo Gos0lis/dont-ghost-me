@@ -278,6 +278,39 @@ contract DontGhostMe {
 
     /// @notice Leaves an active project and forfeits the entire locked deposit.
     function leaveProject(uint256 projectId) external projectExists(projectId) {
+        _leaveProject(projectId);
+    }
+
+    /// @notice Leave and publish the forfeited deposit as one open rescue bounty (member self-service, one tx).
+    /// @dev Bounty creator is the project owner so the leaver can still claim/rescue later if needed.
+    function leaveAndCreateRescueBounty(uint256 projectId, string calldata description)
+        external
+        projectExists(projectId)
+        returns (uint256 bountyId)
+    {
+        require(bytes(description).length > 0, "Description is required");
+
+        Project storage project = _projects[projectId];
+        uint256 forfeitedDeposit = _leaveProject(projectId);
+
+        project.reservedBounty += forfeitedDeposit;
+        bountyId = nextBountyId++;
+        _bounties[bountyId] = Bounty({
+            id: bountyId,
+            projectId: projectId,
+            description: description,
+            reward: forfeitedDeposit,
+            creator: project.owner,
+            hunter: address(0),
+            status: BountyStatus.Open,
+            statusUpdatedAt: block.timestamp,
+            reviewReason: ""
+        });
+
+        emit BountyCreated(bountyId, projectId, project.owner, description, forfeitedDeposit);
+    }
+
+    function _leaveProject(uint256 projectId) private returns (uint256 forfeitedDeposit) {
         Project storage project = _projects[projectId];
         Member storage member = _members[projectId][msg.sender];
 
@@ -285,7 +318,7 @@ contract DontGhostMe {
         require(member.active, "Member is not active");
         require(!member.withdrawn, "Deposit already withdrawn");
 
-        uint256 forfeitedDeposit = member.deposit;
+        forfeitedDeposit = member.deposit;
 
         member.active = false;
         project.rescuePool += forfeitedDeposit;

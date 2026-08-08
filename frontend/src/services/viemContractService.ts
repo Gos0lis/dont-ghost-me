@@ -172,8 +172,9 @@ function toDisplayMon(wei: bigint): number {
 }
 
 function toWei(amount: number): bigint {
-  // UI uses whole MON-like units; map 1 → 1 ether for Anvil/Monad-native demos.
-  return parseEther(String(amount))
+  // Avoid binary float artifacts (e.g. 0.1 + 0.2) when mapping UI MON → wei.
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('无效金额')
+  return parseEther(amount.toFixed(18))
 }
 
 /** Map Solidity ProjectStatus (Active/Finished/Cancelled) to UI status. */
@@ -339,7 +340,8 @@ function formatContractError(error: unknown, fallback = '链上交易失败'): s
     shortMessage?: string
     details?: string
     message?: string
-    cause?: { shortMessage?: string; message?: string; reason?: string }
+    cause?: { shortMessage?: string; message?: string; reason?: string; data?: { errorName?: string } }
+    data?: { errorName?: string; args?: unknown }
   }
   const text = [
     err?.shortMessage,
@@ -348,22 +350,30 @@ function formatContractError(error: unknown, fallback = '链上交易失败'): s
     err?.cause?.reason,
     err?.cause?.message,
     err?.message,
+    err?.data?.errorName,
+    err?.cause?.data?.errorName,
   ]
     .filter(Boolean)
     .join('\n')
 
   if (/Only project owner/i.test(text)) {
-    return '只有承诺创建者可以提交「任务完成」'
+    return '只有承诺创建者可以出票 / 结算。请切换到创建该承诺的钱包后再试'
   }
+  if (/Insufficient rescue pool/i.test(text)) {
+    return '救场池余额不足，无法按当前金额出票（请刷新后重试）'
+  }
+  if (/Reward must be greater than zero/i.test(text)) return '悬赏金额必须大于 0'
+  if (/Description is required/i.test(text)) return '悬赏描述不能为空'
   if (/Project is not active/i.test(text)) return '该承诺已结束，无法再次结算'
   if (/reserved bounties/i.test(text)) return '仍有未结清的救场悬赏，请先完成验收'
+  if (/Member is not active/i.test(text)) return '该成员未处于已加入状态，无法退出'
   if (/User rejected|user denied|rejected the request/i.test(text)) return '已取消钱包签名'
 
   const reason =
     text.match(/reverted with the following reason:\s*\n?\s*(.+)/i)?.[1]?.trim() ||
     text.match(/execution reverted:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Error:\s*(.+)$/im)?.[1]?.trim()
-  if (reason && reason.length < 100 && !/version:|http|0x/i.test(reason)) {
+  if (reason && reason.length < 140 && !/version:|http|0x{10,}/i.test(reason)) {
     return reason.replace(/\.$/, '')
   }
   return fallback
@@ -377,17 +387,27 @@ async function writeContract(
   value?: bigint,
 ): Promise<{ hash: Hash; message: string; receipt: Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>> }> {
   const { client, account, profile } = await walletFor(accountId)
+  const chain = getConfiguredChain()
+  const request = {
+    address: getAddress(),
+    abi: dontGhostMeAbi,
+    functionName: functionName as never,
+    args: args as never,
+    account,
+    chain,
+    value,
+  } as const
+
+  // Preflight so wallet / UI see the real revert reason before a doomed signature.
+  try {
+    await getPublic().simulateContract(request as never)
+  } catch (error) {
+    throw new Error(formatContractError(error))
+  }
+
   let hash: Hash
   try {
-    hash = (await client.writeContract({
-      address: getAddress(),
-      abi: dontGhostMeAbi,
-      functionName: functionName as never,
-      args: args as never,
-      account,
-      chain: getConfiguredChain(),
-      value,
-    })) as Hash
+    hash = (await client.writeContract(request as never)) as Hash
   } catch (error) {
     throw new Error(formatContractError(error))
   }
@@ -398,6 +418,14 @@ async function writeContract(
   })
   const ok = receipt.status === 'success'
   const message = ok ? `${method} 成功` : `${method} 失败`
+  let revertReason = ''
+  if (!ok) {
+    try {
+      await getPublic().simulateContract(request as never)
+    } catch (error) {
+      revertReason = formatContractError(error)
+    }
+  }
   const localReceipt: TransactionReceipt = {
     hash: hash as Hash,
     status: ok ? 'success' : 'failed',
@@ -406,7 +434,7 @@ async function writeContract(
     method,
     from: profile.address,
     message,
-    error: ok ? undefined : formatContractError(new Error(`${functionName} reverted`), '链上交易失败'),
+    error: ok ? undefined : revertReason || '链上交易失败',
   }
   sessionStorage.setItem(`dont-ghost-me:receipt:${hash}`, JSON.stringify(localReceipt))
   emitUpdate()
@@ -439,37 +467,69 @@ function deployFromBlock(): bigint {
 async function syncIndexesFromEvents() {
   try {
     const index = readIndex()
-    // Write paths already remember ids. Skip full-history scans on the hot path —
-    // those were a major source of “Anvil feels slow” after every button click.
-    if (index.projectIds.length > 0 || index.bountyIds.length > 0) return
-
     const publicC = getPublic()
     const address = getAddress()
-    const fromBlock = deployFromBlock()
-    const [projectLogs, bountyLogs] = await Promise.all([
-      publicC.getContractEvents({
-        address,
-        abi: dontGhostMeAbi,
-        eventName: 'ProjectCreated',
-        fromBlock,
-        toBlock: 'latest',
-      }),
-      publicC.getContractEvents({
-        address,
-        abi: dontGhostMeAbi,
-        eventName: 'BountyCreated',
-        fromBlock,
-        toBlock: 'latest',
-      }),
-    ])
 
-    for (const log of projectLogs) {
-      const id = String(log.args.projectId)
-      if (id && !index.projectIds.includes(id)) index.projectIds.push(id)
+    // Prefer counter reads — Monad public RPC caps eth_getLogs to a tiny block range.
+    try {
+      const [nextProjectId, nextBountyId] = await Promise.all([
+        publicC.readContract({ address, abi: dontGhostMeAbi, functionName: 'nextProjectId' }),
+        publicC.readContract({ address, abi: dontGhostMeAbi, functionName: 'nextBountyId' }),
+      ])
+      let changed = false
+      for (let id = 1n; id < nextProjectId; id += 1n) {
+        const key = String(id)
+        if (!index.projectIds.includes(key)) {
+          index.projectIds.push(key)
+          changed = true
+        }
+      }
+      for (let id = 1n; id < nextBountyId; id += 1n) {
+        const key = String(id)
+        if (!index.bountyIds.includes(key)) {
+          index.bountyIds.push(key)
+          changed = true
+        }
+      }
+      if (changed) writeIndex(index)
+      return
+    } catch (error) {
+      console.warn('[viem] syncIndexes via counters failed, falling back to events', error)
     }
-    for (const log of bountyLogs) {
-      const id = String(log.args.bountyId)
-      if (id && !index.bountyIds.includes(id)) index.bountyIds.push(id)
+
+    if (index.projectIds.length > 0 || index.bountyIds.length > 0) return
+
+    const fromBlock = deployFromBlock()
+    const latest = await publicC.getBlockNumber()
+    const span = 99n // Monad RPC: eth_getLogs limited to a 100-block range
+    let cursor = fromBlock
+    while (cursor <= latest) {
+      const toBlock = cursor + span > latest ? latest : cursor + span
+      const [projectLogs, bountyLogs] = await Promise.all([
+        publicC.getContractEvents({
+          address,
+          abi: dontGhostMeAbi,
+          eventName: 'ProjectCreated',
+          fromBlock: cursor,
+          toBlock,
+        }),
+        publicC.getContractEvents({
+          address,
+          abi: dontGhostMeAbi,
+          eventName: 'BountyCreated',
+          fromBlock: cursor,
+          toBlock,
+        }),
+      ])
+      for (const log of projectLogs) {
+        const id = String(log.args.projectId)
+        if (id && !index.projectIds.includes(id)) index.projectIds.push(id)
+      }
+      for (const log of bountyLogs) {
+        const id = String(log.args.bountyId)
+        if (id && !index.bountyIds.includes(id)) index.bountyIds.push(id)
+      }
+      cursor = toBlock + 1n
     }
     writeIndex(index)
   } catch (error) {
@@ -584,9 +644,27 @@ async function syncMemberJoins(projectId: string) {
           member.id !== 'member-0' &&
           member !== creatorSeat,
       )
-      if (!seat) continue
-      seat.address = address as Address
-      seat.pendingInvite = false
+      if (seat) {
+        seat.address = address as Address
+        seat.pendingInvite = false
+        assigned.add(address)
+        changed = true
+        continue
+      }
+
+      // Invitees only have seats from their own localStorage / invite link.
+      // Still surface other wallets that already joined on-chain.
+      const short = `${address.slice(0, 6)}…${address.slice(-4)}`
+      meta.members.push({
+        id: `member-onchain-${address.slice(2, 10)}`,
+        name: short,
+        address: address as Address,
+        role: '成员',
+        task: '已加入',
+        taskDeadline: new Date().toISOString().slice(0, 10),
+        deposit: 0,
+        pendingInvite: false,
+      })
       assigned.add(address)
       changed = true
     }
@@ -1070,6 +1148,47 @@ export const viemContractService: ContractService = {
     return { hash, status: 'pending' }
   },
 
+  async leaveAndCreateRescueBounty(projectId, description) {
+    if (!isChainMode() && getChainMode() !== 'local') {
+      throw new Error('leaveAndCreateRescueBounty 仅用于链上 / 本地 Anvil')
+    }
+    const accountId = currentAccountId()
+    const { hash, receipt } = await writeContract(
+      'leaveAndCreateRescueBounty',
+      accountId,
+      'leaveAndCreateRescueBounty',
+      [BigInt(projectId), description],
+    )
+    let bountyId = ''
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({ abi: dontGhostMeAbi, data: log.data, topics: log.topics })
+        if (decoded.eventName === 'BountyCreated') {
+          bountyId = String((decoded.args as { bountyId: bigint }).bountyId)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!bountyId) {
+      const next = await getPublic().readContract({
+        address: getAddress(),
+        abi: dontGhostMeAbi,
+        functionName: 'nextBountyId',
+      })
+      bountyId = String(next - 1n)
+    }
+    rememberBountyId(bountyId)
+    rememberProjectId(projectId)
+    const store = readMetaStore()
+    store.bountyTitles[bountyId] = {
+      title: description.slice(0, 40) || `救场 #${bountyId}`,
+      publisherName: readSession().account?.name,
+    }
+    writeMetaStore(store)
+    return { hash, status: 'pending' as const, bountyId }
+  },
+
   async advanceProject(_projectId) {
     throw new Error('链上模式暂不支持里程碑推进，请使用 finishProject / 完成项目')
   },
@@ -1247,6 +1366,8 @@ export const viemContractService: ContractService = {
     deposit: number
     title: string
     category: string
+    /** Full creator roster so every invitee sees the same member list. */
+    roster?: Array<{ id: string; name: string; task: string; deposit: number }>
   }) {
     if (!isChainMode()) throw new Error('邀请席位仅用于公链模式')
     rememberProjectId(input.projectId)
@@ -1267,6 +1388,65 @@ export const viemContractService: ContractService = {
     const store = readMetaStore()
     const existing = store.byProjectId[input.projectId]
     const members = existing?.members ? [...existing.members] : []
+
+    const upsertSeat = (seatInput: {
+      id: string
+      name: string
+      task: string
+      deposit: number
+      isCreator: boolean
+    }) => {
+      const found = members.find((item) => item.id === seatInput.id)
+      if (found) {
+        found.name = seatInput.name || found.name
+        found.task = seatInput.task || found.task
+        found.role = seatInput.isCreator ? found.role || '发起人' : seatInput.task || found.role
+        found.deposit = seatInput.deposit || found.deposit
+        if (seatInput.isCreator) {
+          if (isPlaceholderAddress(found.address)) found.address = owner
+          found.pendingInvite = false
+        } else if (
+          found.address.toLowerCase() === owner.toLowerCase() ||
+          isPlaceholderAddress(found.address)
+        ) {
+          found.address = ZERO_ADDRESS
+          found.pendingInvite = true
+        }
+        return
+      }
+      members.push({
+        id: seatInput.id,
+        name: seatInput.name || (seatInput.isCreator ? '发起人' : '受邀成员'),
+        address: seatInput.isCreator ? owner : ZERO_ADDRESS,
+        role: seatInput.isCreator ? '发起人' : seatInput.task || '待分配',
+        task: seatInput.task || (seatInput.isCreator ? '项目发起' : '待分配任务'),
+        taskDeadline: today,
+        deposit: seatInput.deposit || deposit,
+        pendingInvite: !seatInput.isCreator,
+      })
+    }
+
+    // Prefer the shared roster from the invite link so every browser sees the same seats.
+    if (input.roster?.length) {
+      // Drop synthetic seats from earlier hydrates; syncMemberJoins will re-bind on-chain joins.
+      for (let i = members.length - 1; i >= 0; i -= 1) {
+        if (members[i].id.startsWith('member-onchain-')) members.splice(i, 1)
+      }
+      const ordered = [...input.roster].sort((a, b) => {
+        if (a.id === 'member-0') return -1
+        if (b.id === 'member-0') return 1
+        return a.id.localeCompare(b.id)
+      })
+      for (const seat of ordered) {
+        upsertSeat({
+          id: seat.id,
+          name: seat.name,
+          task: seat.task,
+          deposit: seat.deposit || deposit,
+          isCreator: seat.id === 'member-0',
+        })
+      }
+    }
 
     // Always keep a creator seat so owner joins are never mapped onto invitee seats.
     let creator = members.find((item) => item.id === 'member-0')
@@ -1313,6 +1493,18 @@ export const viemContractService: ContractService = {
         pendingInvite: true,
       })
     }
+
+    // Keep creator first, then stable member-* order, then any on-chain-discovered seats.
+    members.sort((a, b) => {
+      if (a.id === 'member-0') return -1
+      if (b.id === 'member-0') return 1
+      const aInvite = /^member-\d+$/.test(a.id)
+      const bInvite = /^member-\d+$/.test(b.id)
+      if (aInvite && bInvite) return a.id.localeCompare(b.id, undefined, { numeric: true })
+      if (aInvite) return -1
+      if (bInvite) return 1
+      return a.id.localeCompare(b.id)
+    })
 
     store.byProjectId[input.projectId] = {
       description: existing?.description ?? `${input.category} · ${raw.name || '共同承诺'}`,

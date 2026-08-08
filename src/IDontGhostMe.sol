@@ -170,6 +170,10 @@ interface IDontGhostMe {
 
     function leaveProject(uint256 projectId) external;
 
+    function leaveAndCreateRescueBounty(uint256 projectId, string calldata description)
+        external
+        returns (uint256 bountyId);
+
     function withdrawDeposit(uint256 projectId) external;
 
     function createBounty(uint256 projectId, string calldata description, uint256 reward)

@@ -241,11 +241,15 @@
                       <span>EXIT NOTE</span>
                       成员退出
                     </button>
+                    <button class="complete-slip-button" id="openRescueReview" type="button" hidden>
+                      <span>REVIEW</span>
+                      验收救场
+                    </button>
                     <button class="complete-slip-button" id="openCompleteFlow" type="button">
                       <span>TASK DONE</span>
                       任务完成
                     </button>
-                    <button class="text-button" data-route="/rescue" type="button">查看救场任务 <span>→</span></button>
+                    <button class="text-button" id="viewProjectRescue" data-route="/rescue" type="button">查看救场任务 <span>→</span></button>
                   </div>
                 </div>
 
@@ -290,6 +294,7 @@
 
             <div class="page-tabs" role="tablist" aria-label="救场筛选">
               <button class="page-tab is-active" type="button" data-rescue-tab="open" role="tab" aria-selected="true">全部开放</button>
+              <button class="page-tab" type="button" data-rescue-tab="review" role="tab" aria-selected="false">待我验收</button>
               <button class="page-tab" type="button" data-rescue-tab="mine" role="tab" aria-selected="false">我领取的</button>
               <button class="page-tab" type="button" data-rescue-tab="done" role="tab" aria-selected="false">已完成</button>
             </div>

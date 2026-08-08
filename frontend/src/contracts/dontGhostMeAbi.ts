@@ -809,6 +809,30 @@ export const dontGhostMeAbi = [
   },
   {
     "type": "function",
+    "name": "leaveAndCreateRescueBounty",
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bountyId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "nextBountyId",
     "inputs": [],
     "outputs": [

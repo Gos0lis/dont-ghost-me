@@ -40,6 +40,14 @@ export interface ContractService {
   /** Mock: lock deposit. Local/chain: joinProject(msg.value). */
   lockDeposit(projectId: string, memberId: string): Promise<TransactionResponse>
   quitProject(projectId: string, memberId: string): Promise<TransactionResponse>
+  /**
+   * Chain: one-tx leave + publish forfeited deposit as an open rescue bounty.
+   * Returns bountyId when the receipt includes BountyCreated.
+   */
+  leaveAndCreateRescueBounty?(
+    projectId: string,
+    description: string,
+  ): Promise<TransactionResponse & { bountyId?: string }>
   /** Mock-only milestone helper. */
   advanceProject(projectId: string): Promise<TransactionResponse>
   completeProject(projectId: string): Promise<TransactionResponse>
@@ -73,6 +81,7 @@ export interface ContractService {
     deposit: number
     title: string
     category: string
+    roster?: Array<{ id: string; name: string; task: string; deposit: number }>
   }): Promise<void>
 }
 

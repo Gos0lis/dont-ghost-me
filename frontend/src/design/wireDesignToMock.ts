@@ -8,6 +8,7 @@ import {
 import {
   designBackend,
   sceneFromProject,
+  scaleRescueSubtasks,
   type DesignSnapshot,
   type RescuePackageMeta,
 } from '../services/designBackend'
@@ -24,6 +25,48 @@ type PendingInvite = {
   deposit: number
   title: string
   category: string
+  roster?: Array<{ id: string; name: string; task: string; deposit: number }>
+}
+
+const INVITE_QUERY_KEYS = [
+  'invite',
+  'member',
+  'name',
+  'task',
+  'deposit',
+  'title',
+  'category',
+  'roster',
+] as const
+
+function inviteFromSearchParams(params: URLSearchParams): PendingInvite | null {
+  if (!params.get('invite') || !params.get('member')) return null
+  return {
+    projectId: params.get('invite')!,
+    memberId: params.get('member')!,
+    name: params.get('name') || '受邀成员',
+    task: params.get('task') || '待分配任务',
+    deposit: Number(params.get('deposit') || 0),
+    title: params.get('title') || '共同承诺',
+    category: params.get('category') || '链上项目',
+    roster: designBackend.decodeInviteRoster(params.get('roster')),
+  }
+}
+
+function inviteSearchParams(invite: PendingInvite): URLSearchParams {
+  const search = new URLSearchParams({
+    invite: invite.projectId,
+    member: invite.memberId,
+    name: invite.name,
+    task: invite.task,
+    deposit: String(invite.deposit),
+    title: invite.title,
+    category: invite.category,
+  })
+  if (invite.roster?.length) {
+    search.set('roster', designBackend.encodeInviteRoster(invite.roster))
+  }
+  return search
 }
 
 function readPendingInvite(): PendingInvite | null {
@@ -147,7 +190,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
   const getPath = options?.getPath ?? (() => window.location.pathname)
 
   let promiseTab: 'create' | 'active' | 'done' = 'active'
-  let rescueTab: 'open' | 'mine' | 'done' = 'open'
+  let rescueTab: 'open' | 'mine' | 'done' | 'review' = 'open'
 
   const timers = new Set<number>()
   const trackTimeout = (fn: () => void, ms: number) => {
@@ -414,8 +457,13 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
           ? '你还没有领取中的救场任务。'
           : rescueTab === 'done'
             ? '还没有已完成的救场任务。'
-            : '暂无开放的救场任务。成员退出并出票后会出现在这里。'
-      setRescueEmpty('暂无救场任务', emptyCopy)
+            : rescueTab === 'review'
+              ? '当前没有等待你验收的救场成果。补位者提交后会出现在这里。'
+              : '暂无开放的救场任务。成员退出并出票后会出现在这里。'
+      setRescueEmpty(
+        rescueTab === 'review' ? '暂无待验收任务' : '暂无救场任务',
+        emptyCopy,
+      )
       return
     }
     if (rescueEmpty) rescueEmpty.hidden = true
@@ -454,6 +502,9 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     if (rescueTab === 'open') {
       if (title) title.textContent = '等待领取的救场票'
       if (desc) desc.textContent = '选择一张完整救场票，补上团队留下的缺口。子项只是交付清单，需整包领取。'
+    } else if (rescueTab === 'review') {
+      if (title) title.textContent = '待我验收的救场票'
+      if (desc) desc.textContent = '补位者已提交成果。作为承诺创建者，请验收通过后发放奖励。'
     } else if (rescueTab === 'mine') {
       if (title) title.textContent = '我领取的救场票'
       if (desc) desc.textContent = '你已领取的整包任务：提交成果后等待负责人验收。'
@@ -669,6 +720,12 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       hasPublishedRescue &&
       rescueStatuses.every((status) => ['paid', 'approved', 'rejected', 'cancelled'].includes(status))
     const rescueInFlight = hasPublishedRescue && !allRescueSettled
+    const pendingReview = designBackend.listPackagesAwaitingCreatorReview(live, project.id)
+    const walletAddress = snapshot.wallet.account?.address
+    const isCreator =
+      getChainMode() === 'mock' ||
+      Boolean(walletAddress && addressesMatch(project.creatorAddress, walletAddress))
+    const awaitingReview = pendingReview.length > 0
 
     setText(
       '#projectStage',
@@ -676,11 +733,13 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         ? '等待确认'
         : project.status === 'completed'
           ? '已完成'
-          : rescueInFlight
-            ? '救场进行中'
-            : allRescueSettled
-              ? '救场已结算 · 待任务完成'
-              : project.category,
+          : awaitingReview
+            ? '救场待验收'
+            : rescueInFlight
+              ? '救场进行中'
+              : allRescueSettled
+                ? '救场已结算 · 待任务完成'
+                : project.category,
     )
     const [t1, t2, t3, t4] = timelineLabels(project)
     setText('#timelineOne', t1)
@@ -695,20 +754,22 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       stamp.hidden = !rescueInFlight
       const stampSmall = stamp.querySelector('small')
       const stampStrong = stamp.querySelector('strong')
-      if (stampSmall) stampSmall.textContent = 'RESCUE!'
-      if (stampStrong) stampStrong.textContent = '救场中'
+      if (stampSmall) stampSmall.textContent = awaitingReview ? 'REVIEW' : 'RESCUE!'
+      if (stampStrong) stampStrong.textContent = awaitingReview ? '待验收' : '救场中'
     }
 
     setText('#fundAmount', String(project.rescuePool))
     const fundDescription = $('#fundDescription')
     if (fundDescription) {
-      fundDescription.innerHTML = rescueInFlight
-        ? `救场悬赏进行中<br />验收后发放给补位者`
-        : allRescueSettled
-          ? `救场已结算完成<br />可点击「任务完成」结束承诺`
-          : project.rescuePool > 0
-            ? `退出成员的保证金<br />已进入救场池`
-            : `当前救场池为空<br />退出后保证金将转入此处`
+      fundDescription.innerHTML = awaitingReview
+        ? `补位者已提交成果<br />请点击「验收救场」审核发放`
+        : rescueInFlight
+          ? `救场悬赏进行中<br />验收后发放给补位者`
+          : allRescueSettled
+            ? `救场已结算完成<br />可点击「任务完成」结束承诺`
+            : project.rescuePool > 0
+              ? `退出成员的保证金<br />已进入救场池`
+              : `当前救场池为空<br />退出后保证金将转入此处`
     }
 
     const exitBtn = $('#openExitFlow') as HTMLButtonElement | null
@@ -717,19 +778,29 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         designBackend.allMembersJoined(project) && designBackend.isActiveProjectStatus(project.status)
       exitBtn.disabled = !canExit
       exitBtn.title = canExit
-        ? '办理成员退出并转入救场池'
+        ? '申请自己退出（保证金自动进入救场悬赏）'
         : '请先完成全部成员确认并锁定保证金'
       exitBtn.classList.toggle('is-disabled', !canExit)
+    }
+
+    const reviewBtn = $('#openRescueReview') as HTMLButtonElement | null
+    if (reviewBtn) {
+      const showReview = isCreator && awaitingReview
+      reviewBtn.hidden = !showReview
+      reviewBtn.disabled = !showReview
+      reviewBtn.classList.toggle('is-disabled', !showReview)
+      reviewBtn.title = showReview ? '打开救场成果验收并支付奖励' : ''
+    }
+
+    const viewRescueBtn = $('#viewProjectRescue') as HTMLButtonElement | null
+    if (viewRescueBtn) {
+      viewRescueBtn.textContent = awaitingReview && isCreator ? '去验收大厅 →' : '查看救场任务 →'
     }
 
     const completeBtn = $('#openCompleteFlow') as HTMLButtonElement | null
     if (completeBtn) {
       const joined = designBackend.allMembersJoined(project)
       const reservedBlocked = project.reservedBounty > 0
-      const walletAddress = snapshot?.wallet.account?.address
-      const isCreator =
-        getChainMode() === 'mock' ||
-        Boolean(walletAddress && addressesMatch(project.creatorAddress, walletAddress))
       const flowReady =
         designBackend.isActiveProjectStatus(project.status) &&
         joined &&
@@ -742,13 +813,15 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         ? '该承诺已结算完成'
         : !joined
           ? '请先完成全部成员确认并锁定保证金'
-          : rescueInFlight || reservedBlocked
-            ? '请先在救场大厅完成验收结算，进度与时间线第 3 步对齐后再点任务完成'
-            : !isCreator
-              ? '只有承诺创建者可以提交「任务完成」'
-              : allRescueSettled
-                ? '救场已完成 · 点击结束承诺并解锁保证金'
-                : '全员履约完成，结束承诺并解锁保证金退回'
+          : awaitingReview
+            ? '请先点击「验收救场」完成验收支付'
+            : rescueInFlight || reservedBlocked
+              ? '请先在救场大厅完成验收结算，进度与时间线第 3 步对齐后再点任务完成'
+              : !isCreator
+                ? '只有承诺创建者可以提交「任务完成」'
+                : allRescueSettled
+                  ? '救场已完成 · 点击结束承诺并解锁保证金'
+                  : '全员履约完成，结束承诺并解锁保证金退回'
     }
   }
 
@@ -1363,16 +1436,10 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
   const clearInviteQuery = () => {
     clearPendingInvite()
     const url = new URL(window.location.href)
-    if (
-      ![...url.searchParams.keys()].some((key) =>
-        ['invite', 'member', 'name', 'task', 'deposit', 'title', 'category'].includes(key),
-      )
-    ) {
+    if (![...url.searchParams.keys()].some((key) => INVITE_QUERY_KEYS.includes(key as (typeof INVITE_QUERY_KEYS)[number]))) {
       return
     }
-    ;['invite', 'member', 'name', 'task', 'deposit', 'title', 'category'].forEach((key) =>
-      url.searchParams.delete(key),
-    )
+    INVITE_QUERY_KEYS.forEach((key) => url.searchParams.delete(key))
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   }
 
@@ -1468,22 +1535,44 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     const project = designBackend.getActiveProject(snapshot)
     if (!project) return
     const scene = sceneFromProject(project)
-    const templates = rescuePackagePresets[scene].subtasks
-    const preferred = designBackend.findQuitCandidate(project)
+    const preferred = designBackend.findQuitCandidate(project, snapshot.wallet)
     const deposit = preferred?.deposit ?? project.members[0]?.deposit ?? 0
+    const poolPreview =
+      preferred?.status === 'quit'
+        ? Math.max(0, project.rescuePool - project.reservedBounty) || deposit
+        : deposit
+    const templates =
+      getChainMode() === 'chain'
+        ? [
+            {
+              ...rescuePackagePresets[scene].subtasks[0],
+              title: rescuePackagePresets[scene].title,
+              category: rescuePackagePresets[scene].category,
+              reward: poolPreview || deposit || 1,
+            },
+          ]
+        : scaleRescueSubtasks(rescuePackagePresets[scene].subtasks, poolPreview || deposit || 1)
+    const formatAmount = (value: number) => {
+      if (!Number.isFinite(value)) return '0'
+      const text = value.toFixed(6).replace(/\.?0+$/, '')
+      return text || '0'
+    }
     ;['#exitDepositAmount', '#exitPoolAmount', '#exitReceiptAmount'].forEach((selector) => {
       const node = $(selector)
-      if (node) node.textContent = String(deposit)
+      if (node) node.textContent = formatAmount(poolPreview || deposit)
     })
     const nodeTickets = $('#exitReceiptTickets')
     if (nodeTickets) nodeTickets.textContent = `1 个 · ${templates.length} 项交付`
 
-    const candidates = designBackend.listQuittableMembers(project)
+    const candidates = designBackend.listExitFlowMembers(project, snapshot.wallet)
     const confirmExit = $('#confirmExitTransfer') as HTMLButtonElement | null
     const continueExit = $('#continueExitFlow') as HTMLButtonElement | null
 
     if (candidates.length === 0) {
-      exitMemberOptions.innerHTML = `<p class="profile-list-empty">还没有可退出的成员。请先在「成员确认」里完成加入并锁定保证金。</p>`
+      exitMemberOptions.innerHTML =
+        getChainMode() === 'chain'
+          ? `<p class="profile-list-empty">当前钱包没有可退出的席位。请用已加入成员的钱包连接后再申请退出。</p>`
+          : `<p class="profile-list-empty">还没有可退出的成员。请先在「成员确认」里完成加入并锁定保证金。</p>`
       if (confirmExit) confirmExit.disabled = true
       if (continueExit) continueExit.disabled = true
       setTextSafe('#exitingMemberName', '—')
@@ -1494,15 +1583,23 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       if (continueExit) continueExit.disabled = false
       const defaultId = preferred?.id ?? candidates[0].id
       exitMemberOptions.innerHTML = candidates
-        .map(
-          (member, index) => `
+        .map((member, index) => {
+          const pendingTickets = member.status === 'quit'
+          return `
         <button class="exit-member-option${member.id === defaultId ? ' is-selected' : ''}" type="button"
-          data-member-id="${member.id}" data-name="${member.name}" data-role="${member.role}">
+          data-member-id="${member.id}" data-name="${member.name}" data-role="${member.role}"
+          data-deposit="${member.deposit}" data-pending-tickets="${pendingTickets ? '1' : '0'}">
           <i>${String(index + 1).padStart(2, '0')}</i>
-          <span><strong>${member.name}</strong><small>${member.role} · 已加入</small></span>
+          <span><strong>${member.name}</strong><small>${
+            pendingTickets
+              ? '已退出 · 待完成出票'
+              : getChainMode() === 'chain'
+                ? `${member.role} · 将用当前钱包退出并自动出票`
+                : `${member.role} · 已加入`
+          }</small></span>
           <em aria-hidden="true"></em>
-        </button>`,
-        )
+        </button>`
+        })
         .join('')
       const selected =
         (exitMemberOptions.querySelector(
@@ -1519,7 +1616,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
           (task) => `
           <div class="exit-task-slip">
             <span><strong>${task.title}</strong><small>交付项 · ${task.category}</small></span>
-            <b>${task.reward} ${unit()}</b>
+            <b>${formatAmount(task.reward)} ${unit()}</b>
           </div>`,
         )
         .join('')
@@ -1536,8 +1633,55 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       item.classList.toggle('is-selected', item === option)
     })
     setTextSafe('#exitingMemberName', option.dataset.name ?? '')
-    setTextSafe('#exitingMemberRole', `原负责：${option.dataset.role ?? ''}`)
+    const pendingTickets = option.dataset.pendingTickets === '1'
+    setTextSafe(
+      '#exitingMemberRole',
+      pendingTickets ? '已退出 · 待完成出票' : `原负责：${option.dataset.role ?? ''}`,
+    )
     setTextSafe('#exitReceiptMember', option.dataset.name ?? '')
+
+    if (!snapshot) return
+    const project = designBackend.getActiveProject(snapshot)
+    if (!project) return
+    const scene = sceneFromProject(project)
+    const selectedDeposit = Number(option.dataset.deposit || 0)
+    const poolPreview = pendingTickets
+      ? Math.max(0, project.rescuePool - project.reservedBounty) || selectedDeposit
+      : selectedDeposit
+    const amount = poolPreview || selectedDeposit
+    const formatAmount = (value: number) => {
+      if (!Number.isFinite(value)) return '0'
+      const text = value.toFixed(6).replace(/\.?0+$/, '')
+      return text || '0'
+    }
+    ;['#exitDepositAmount', '#exitPoolAmount', '#exitReceiptAmount'].forEach((selector) => {
+      setTextSafe(selector, formatAmount(amount))
+    })
+    const templates =
+      getChainMode() === 'chain'
+        ? [
+            {
+              ...rescuePackagePresets[scene].subtasks[0],
+              title: rescuePackagePresets[scene].title,
+              category: rescuePackagePresets[scene].category,
+              reward: amount || 1,
+            },
+          ]
+        : scaleRescueSubtasks(rescuePackagePresets[scene].subtasks, amount || 1)
+    const taskList = $('#exitTaskList')
+    if (taskList) {
+      taskList.innerHTML = templates
+        .map(
+          (task) => `
+          <div class="exit-task-slip">
+            <span><strong>${task.title}</strong><small>交付项 · ${task.category}</small></span>
+            <b>${formatAmount(task.reward)} ${unit()}</b>
+          </div>`,
+        )
+        .join('')
+    }
+    const nodeTickets = $('#exitReceiptTickets')
+    if (nodeTickets) nodeTickets.textContent = `1 个 · ${templates.length} 项交付`
   }
 
   const openExitFlow = () => {
@@ -1547,13 +1691,18 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       showToast('请先选择一份进行中的承诺')
       return
     }
-    if (!designBackend.allMembersJoined(project)) {
+    const canResumeTickets = designBackend.listMembersNeedingRescueTickets(project).length > 0
+    if (!canResumeTickets && !designBackend.allMembersJoined(project)) {
       showToast('请先让全部成员完成确认并锁定保证金，再办理退出出票')
       openConfirmFlow()
       return
     }
-    if (designBackend.listQuittableMembers(project).length === 0) {
-      showToast('请先让成员完成确认并锁定保证金')
+    if (designBackend.listExitFlowMembers(project, snapshot.wallet).length === 0) {
+      showToast(
+        getChainMode() === 'chain'
+          ? '请用已加入的成员钱包连接后，再申请自己退出'
+          : '请先让成员完成确认并锁定保证金',
+      )
       return
     }
     fillExitFlow()
@@ -1624,8 +1773,12 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
   $('#continueExitFlow')?.addEventListener('click', () => {
     if (!snapshot) return
     const project = designBackend.getActiveProject(snapshot)
-    if (!project || designBackend.listQuittableMembers(project).length === 0) {
-      showToast('请先让成员完成确认并锁定保证金')
+    if (!project || designBackend.listExitFlowMembers(project, snapshot.wallet).length === 0) {
+      showToast(
+        getChainMode() === 'chain'
+          ? '请用已加入的成员钱包连接后，再申请自己退出'
+          : '请先让成员完成确认并锁定保证金',
+      )
       return
     }
     setExitStep(1)
@@ -1658,12 +1811,19 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         return
       }
       const scene = sceneFromProject(project)
-      const result = await run('成员退出', () =>
+      const pendingTickets = selected?.dataset.pendingTickets === '1'
+      const result = await run(pendingTickets ? '继续出票' : '申请退出', () =>
         designBackend.quitAndSpawnTickets(project.id, memberId, scene),
       )
       if (!result) return
       setExitStep(2)
-      showToast(`退出已写入${backendLabel()}，完整救场任务已生成`)
+      showToast(
+        pendingTickets
+          ? `出票已补齐，完整救场任务已生成`
+          : getChainMode() === 'chain'
+            ? `退出已上链，救场悬赏已自动发布到大厅`
+            : `退出已写入${backendLabel()}，完整救场任务已生成`,
+      )
     })()
   })
 
@@ -1740,7 +1900,61 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     }
     setRescueStep(stepMap[status] ?? 0)
     openModal(rescueFlowModal)
+
+    const project = snapshot.projects.find((item) => item.id === pkg.projectId)
+    const isCreator =
+      getChainMode() === 'mock' ||
+      Boolean(
+        snapshot.wallet.account &&
+          project &&
+          addressesMatch(project.creatorAddress, snapshot.wallet.account.address),
+      )
+    const canReview = status === 'submitted' && isCreator
+    const approveBtn = $('#approveRescueWork') as HTMLButtonElement | null
+    const revisionBtn = $('#requestRescueRevision') as HTMLButtonElement | null
+    if (approveBtn) {
+      approveBtn.hidden = status !== 'submitted'
+      approveBtn.disabled = !canReview
+      approveBtn.title = canReview
+        ? '验收通过并支付救场奖励'
+        : '只有承诺创建者可以验收支付，请切换到创建者钱包'
+    }
+    if (revisionBtn) {
+      revisionBtn.hidden = status !== 'submitted'
+      revisionBtn.disabled = !canReview
+      revisionBtn.title = canReview ? '要求补位者返修后再提交' : '只有承诺创建者可以要求返修'
+    }
   }
+
+  $('#openRescueReview')?.addEventListener('click', () => {
+    if (!snapshot) return
+    const project = designBackend.getActiveProject(snapshot)
+    if (!project) {
+      showToast('请先选择一份进行中的承诺')
+      return
+    }
+    const pending = designBackend.listPackagesAwaitingCreatorReview(snapshot, project.id)
+    if (pending.length === 0) {
+      showToast('当前没有待验收的救场成果')
+      return
+    }
+    openRescuePackageFlow(pending[0].id)
+  })
+
+  $('#viewProjectRescue')?.addEventListener('click', (event) => {
+    if (!snapshot) return
+    const project = designBackend.getActiveProject(snapshot)
+    const pending = project
+      ? designBackend.listPackagesAwaitingCreatorReview(snapshot, project.id)
+      : []
+    if (pending.length > 0) {
+      event.preventDefault()
+      rescueTab = 'review'
+      syncRescueTabs()
+      goTo('/rescue')
+      trackTimeout(() => openRescuePackageFlow(pending[0].id), 120)
+    }
+  })
 
   ticketList.addEventListener('click', (event) => {
     const packageCard = (event.target as HTMLElement).closest(
@@ -1924,7 +2138,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
 
   document.querySelectorAll<HTMLElement>('[data-rescue-tab]').forEach((tab) => {
     tab.addEventListener('click', () => {
-      rescueTab = (tab.dataset.rescueTab as 'open' | 'mine' | 'done') || 'open'
+      rescueTab = (tab.dataset.rescueTab as 'open' | 'mine' | 'done' | 'review') || 'open'
       renderRescueHall()
     })
   })
@@ -1972,18 +2186,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       renderAll()
 
       const params = new URLSearchParams(window.location.search)
-      const inviteFromUrl =
-        params.get('invite') && params.get('member')
-          ? {
-              projectId: params.get('invite')!,
-              memberId: params.get('member')!,
-              name: params.get('name') || '受邀成员',
-              task: params.get('task') || '待分配任务',
-              deposit: Number(params.get('deposit') || 0),
-              title: params.get('title') || '共同承诺',
-              category: params.get('category') || '链上项目',
-            }
-          : null
+      const inviteFromUrl = inviteFromSearchParams(params)
       // Prefer URL; fall back to session pending only on /promises (after accidental query strip).
       const invite =
         inviteFromUrl ?? (getPath() === '/promises' ? readPendingInvite() : null)
@@ -1992,16 +2195,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         writePendingInvite(invite)
         // Keep invite query in the URL so refresh / share still works.
         if (getPath() !== '/promises' || !inviteFromUrl) {
-          const search = new URLSearchParams({
-            invite: invite.projectId,
-            member: invite.memberId,
-            name: invite.name,
-            task: invite.task,
-            deposit: String(invite.deposit),
-            title: invite.title,
-            category: invite.category,
-          })
-          goTo(`/promises?${search.toString()}`)
+          goTo(`/promises?${inviteSearchParams(invite).toString()}`)
         } else {
           syncRoute('/promises')
         }
@@ -2053,21 +2247,12 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
 
       // Still try to surface invite UI even if initial chain hydrate failed.
       const params = new URLSearchParams(window.location.search)
-      if (getChainMode() === 'chain' && params.get('invite') && params.get('member')) {
+      const invite = inviteFromSearchParams(params)
+      if (getChainMode() === 'chain' && invite) {
         showToast('链读取失败，仍可尝试打开邀请；请确认网络后连接钱包')
-        void run('打开邀请', () =>
-          designBackend.acceptMemberInvite({
-            projectId: params.get('invite')!,
-            memberId: params.get('member')!,
-            name: params.get('name') || '受邀成员',
-            task: params.get('task') || '待分配任务',
-            deposit: Number(params.get('deposit') || 0),
-            title: params.get('title') || '共同承诺',
-            category: params.get('category') || '链上项目',
-          }),
-        ).then((accepted) => {
+        void run('打开邀请', () => designBackend.acceptMemberInvite(invite)).then((accepted) => {
           if (!accepted) return
-          openConfirmFlow(params.get('member')!)
+          openConfirmFlow(invite.memberId)
           if (!accepted.wallet.isConnected) requestWalletConnect()
         })
         return

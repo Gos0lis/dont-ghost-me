@@ -176,6 +176,31 @@ contract DontGhostMeTest is Test {
         assertEq(member.deposit, DEPOSIT);
     }
 
+    function test_LeaveAndCreateRescueBounty_PublishesFullDeposit() public {
+        uint256 projectId = _createProject();
+        _join(projectId, alice);
+
+        vm.expectEmit(true, true, false, true);
+        emit MemberLeft(projectId, alice, DEPOSIT);
+        vm.expectEmit(true, true, true, true);
+        emit BountyCreated(1, projectId, owner, "Alice exit rescue", DEPOSIT);
+
+        vm.prank(alice);
+        uint256 bountyId = dgm.leaveAndCreateRescueBounty(projectId, "Alice exit rescue");
+
+        DontGhostMe.Project memory project = dgm.getProject(projectId);
+        assertEq(project.rescuePool, DEPOSIT);
+        assertEq(project.reservedBounty, DEPOSIT);
+        assertEq(dgm.getAvailableRescuePool(projectId), 0);
+
+        DontGhostMe.Bounty memory bounty = dgm.getBounty(bountyId);
+        assertEq(bountyId, 1);
+        assertEq(bounty.projectId, projectId);
+        assertEq(bounty.reward, DEPOSIT);
+        assertEq(bounty.creator, owner);
+        assertEq(uint256(bounty.status), uint256(DontGhostMe.BountyStatus.Open));
+    }
+
     function test_FinishProject_AutoRefundsDeposits() public {
         uint256 projectId = _createProject();
         _join(projectId, alice);

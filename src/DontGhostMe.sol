@@ -149,6 +149,7 @@ contract DontGhostMe {
     error ProjectHasOpenExpulsions();
     error OnlyActiveMember();
     error CannotExpelSelf();
+    error CannotVoteAsExpulsionTarget();
     error TargetNotActive();
     error InsufficientActiveMembers();
     error TargetHasOpenProposal();
@@ -543,6 +544,7 @@ contract DontGhostMe {
     }
 
     /// @notice Starts a three-day member vote to expel an inactive contributor.
+    /// @dev Only the project creator may propose. No proposal bond is required.
     function proposeExpulsion(uint256 projectId, address target)
         external
         payable
@@ -571,7 +573,7 @@ contract DontGhostMe {
         Project storage project = _projects[projectId];
 
         require(project.status == ProjectStatus.Active, "Project is not active");
-        if (!_members[projectId][msg.sender].active) revert OnlyActiveMember();
+        require(msg.sender == project.owner, "Only project owner");
         if (target == msg.sender) revert CannotExpelSelf();
         if (!_members[projectId][target].active) revert TargetNotActive();
         if (_activeMemberCounts[projectId] < 3) revert InsufficientActiveMembers();
@@ -590,8 +592,8 @@ contract DontGhostMe {
             revert ExpulsionCooldownActive();
         }
 
-        uint256 requiredBond = getRequiredExpulsionBond(projectId);
-        if (msg.value != requiredBond) revert IncorrectExpulsionBond(requiredBond, msg.value);
+        // Creator-initiated freeloader removal does not require a proposal bond.
+        if (msg.value != 0) revert IncorrectExpulsionBond(0, msg.value);
 
         proposalId = nextExpulsionId++;
         _expulsionProposals[proposalId] = ExpulsionProposal({
@@ -602,7 +604,7 @@ contract DontGhostMe {
             approveVotes: 0,
             rejectVotes: 0,
             deadline: block.timestamp + EXPULSION_VOTING_PERIOD,
-            bondAmount: requiredBond,
+            bondAmount: 0,
             executed: false,
             reason: reason
         });
@@ -612,7 +614,7 @@ contract DontGhostMe {
         _openExpulsionCounts[projectId] += 1;
         _expulsionProposalCounts[projectId] += 1;
 
-        emit ExpulsionProposed(proposalId, projectId, msg.sender, target, requiredBond);
+        emit ExpulsionProposed(proposalId, projectId, msg.sender, target, 0);
         if (bytes(reason).length != 0) emit ExpulsionReasonRecorded(proposalId, reason);
     }
 
@@ -627,12 +629,14 @@ contract DontGhostMe {
     }
 
     /// @notice Casts one vote on an active expulsion proposal.
+    /// @dev The expulsion target cannot vote on their own removal.
     function voteExpulsion(uint256 proposalId, bool support) external expulsionExists(proposalId) {
         ExpulsionProposal storage proposal = _expulsionProposals[proposalId];
         Project storage project = _projects[proposal.projectId];
 
         require(project.status == ProjectStatus.Active, "Project is not active");
         if (!_members[proposal.projectId][msg.sender].active) revert OnlyActiveMember();
+        if (msg.sender == proposal.target) revert CannotVoteAsExpulsionTarget();
         if (proposal.executed) revert ExpulsionAlreadyExecuted();
         if (block.timestamp >= proposal.deadline) revert ExpulsionVotingEnded();
         if (_expulsionVoted[proposalId][msg.sender]) revert ExpulsionAlreadyVoted();
@@ -650,6 +654,7 @@ contract DontGhostMe {
 
     /// @notice Finalizes an expulsion vote after its deadline.
     /// @dev A strict majority of the project's current active members is required.
+    ///      When passed, the forfeited deposit is auto-published as one open rescue bounty.
     function executeExpulsion(uint256 proposalId) external nonReentrant expulsionExists(proposalId) {
         ExpulsionProposal storage proposal = _expulsionProposals[proposalId];
         Project storage project = _projects[proposal.projectId];
@@ -686,6 +691,26 @@ contract DontGhostMe {
             _activeMemberCounts[proposal.projectId] -= 1;
 
             emit MemberExpelled(proposal.projectId, proposal.target, forfeitedDeposit);
+
+            if (forfeitedDeposit > 0) {
+                project.reservedBounty += forfeitedDeposit;
+                uint256 bountyId = nextBountyId++;
+                string memory description =
+                    bytes(proposal.reason).length != 0 ? proposal.reason : "Expelled member rescue";
+                _bounties[bountyId] = Bounty({
+                    id: bountyId,
+                    projectId: proposal.projectId,
+                    description: description,
+                    reward: forfeitedDeposit,
+                    creator: project.owner,
+                    hunter: address(0),
+                    status: BountyStatus.Open,
+                    statusUpdatedAt: block.timestamp,
+                    reviewReason: ""
+                });
+                emit BountyCreated(bountyId, proposal.projectId, project.owner, description, forfeitedDeposit);
+            }
+
             _pendingExpulsionBondRefunds[proposal.proposer] += proposal.bondAmount;
             emit ExpulsionFinalized(proposalId, true, proposal.bondAmount, 0);
         } else {
@@ -817,8 +842,9 @@ contract DontGhostMe {
         return _expulsionVoted[proposalId][voter];
     }
 
+    /// @notice Kept for ABI compatibility; creator-initiated expulsion no longer requires a bond.
     function getRequiredExpulsionBond(uint256 projectId) public view projectExists(projectId) returns (uint256) {
-        return _calculateBps(_projects[projectId].depositAmount, EXPULSION_BOND_BPS);
+        return 0;
     }
 
     function getExpulsionProposalCount(uint256 projectId) external view projectExists(projectId) returns (uint256) {

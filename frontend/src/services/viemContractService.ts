@@ -254,12 +254,89 @@ function txWaitTimeoutMs() {
   return isChainMode() ? 180_000 : 15_000
 }
 
+function isRpcRateLimited(error: unknown): boolean {
+  const text = [
+    (error as { details?: string })?.details,
+    (error as { shortMessage?: string })?.shortMessage,
+    (error as { message?: string })?.message,
+    String(error),
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return /requests limited|15\s*\/\s*sec|429|too many requests|rate limit/i.test(text)
+}
+
+/** Monad public RPC caps ~15 req/s; space out + retry instead of failing invite opens. */
+function createRateAwareFetch(): typeof fetch {
+  let queue: Promise<unknown> = Promise.resolve()
+  let lastStartedAt = 0
+  // Keep under ~8 HTTP req/s on Monad public RPC (hard cap ~15/s).
+  const minGapMs = isChainMode() ? 130 : 0
+
+  return (input, init) => {
+    const run = async (): Promise<Response> => {
+      const wait = Math.max(0, minGapMs - (Date.now() - lastStartedAt))
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+      lastStartedAt = Date.now()
+
+      let lastResponse: Response | undefined
+      let lastError: unknown
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        try {
+          const response = await fetch(input, init)
+          lastResponse = response
+          if (response.status === 429) {
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
+            continue
+          }
+          // JSON-RPC may still return 200 with a rate-limit error body.
+          const cloned = response.clone()
+          try {
+            const payload = (await cloned.json()) as {
+              error?: { message?: string }
+              message?: string
+            }
+            const msg = `${payload?.error?.message ?? ''} ${payload?.message ?? ''}`
+            if (/requests limited|15\s*\/\s*sec|too many requests|rate limit/i.test(msg)) {
+              await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)))
+              continue
+            }
+          } catch {
+            // Non-JSON body: return original response.
+          }
+          return response
+        } catch (error) {
+          lastError = error
+          if (!isRpcRateLimited(error) || attempt === 7) throw error
+          await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)))
+        }
+      }
+      if (lastResponse) return lastResponse
+      throw lastError instanceof Error
+        ? lastError
+        : new Error('Monad 测试网 RPC 暂时限流，请等 1–2 秒再试')
+    }
+
+    const next = queue.then(run, run)
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
+}
+
 function getPublic(): PublicClient {
   if (!publicClient) {
     const chain = getConfiguredChain()
     publicClient = createPublicClient({
       chain,
-      transport: http(chain.rpcUrls.default.http[0], { batch: true }),
+      transport: http(chain.rpcUrls.default.http[0], {
+        batch: true,
+        retryCount: isChainMode() ? 5 : 2,
+        retryDelay: 350,
+        fetch: createRateAwareFetch(),
+      }),
       pollingInterval: rpcPollMs(),
     })
   }
@@ -388,6 +465,9 @@ function formatContractError(error: unknown, fallback = '链上交易失败'): s
   if (/Only project owner/i.test(text)) {
     return '只有承诺创建者可以出票 / 结算。请切换到创建该承诺的钱包后再试'
   }
+  if (/requests limited|15\s*\/\s*sec|429|too many requests|rate limit/i.test(text)) {
+    return 'Monad 测试网 RPC 暂时限流，请等 1–2 秒再打开邀请或刷新页面'
+  }
   if (/Insufficient rescue pool/i.test(text)) {
     return '救场池余额不足，无法按当前金额出票（请刷新后重试）'
   }
@@ -397,13 +477,14 @@ function formatContractError(error: unknown, fallback = '链上交易失败'): s
   if (/reserved bounties/i.test(text)) return '仍有未结清的救场悬赏，请先完成验收'
   if (/Member is not active/i.test(text)) return '该成员未处于已加入状态，无法退出'
   if (/User rejected|user denied|rejected the request/i.test(text)) return '已取消钱包签名'
-  if (/OnlyActiveMember/i.test(text)) return '只有当前活跃成员可以发起或参与投票'
+  if (/OnlyActiveMember/i.test(text)) return '只有当前活跃成员可以参与投票'
+  if (/CannotVoteAsExpulsionTarget/i.test(text)) return '被提议移除的成员不能参与本次投票'
   if (/InsufficientActiveMembers/i.test(text)) return '至少需要 3 名活跃成员才能发起移除投票'
   if (/TargetHasOpenProposal|ProposerHasOpenProposal/i.test(text)) return '已有一项相关移除投票正在进行'
   if (/ExpulsionVotingActive/i.test(text)) return '投票期尚未结束，暂时不能执行结果'
   if (/ExpulsionVotingEnded/i.test(text)) return '投票已经结束，请执行投票结果'
   if (/ExpulsionAlreadyVoted/i.test(text)) return '当前钱包已经投过票'
-  if (/IncorrectExpulsionBond/i.test(text)) return '发起投票所需的提案保证金不正确'
+  if (/IncorrectExpulsionBond/i.test(text)) return '发起移除投票不需要发送额外保证金'
 
   const reason =
     text.match(/reverted with the following reason:\s*\n?\s*(.+)/i)?.[1]?.trim() ||
@@ -500,77 +581,104 @@ function deployFromBlock(): bigint {
   return isChainMode() ? 0n : 0n
 }
 
+const SYNC_INDEX_TTL_MS = 15_000
+let syncIndexesInflight: Promise<void> | null = null
+let syncIndexesDoneAt = 0
+
 async function syncIndexesFromEvents() {
-  try {
-    const index = readIndex()
-    const publicC = getPublic()
-    const address = getAddress()
+  // Deduplicate bursts: hydrate calls getProjects + getBounties in parallel,
+  // and invite open previously stacked a second full hydrate on top.
+  if (Date.now() - syncIndexesDoneAt < SYNC_INDEX_TTL_MS) return
+  if (syncIndexesInflight) return syncIndexesInflight
 
-    // Prefer counter reads — Monad public RPC caps eth_getLogs to a tiny block range.
+  syncIndexesInflight = (async () => {
     try {
-      const [nextProjectId, nextBountyId] = await Promise.all([
-        publicC.readContract({ address, abi: dontGhostMeAbi, functionName: 'nextProjectId' }),
-        publicC.readContract({ address, abi: dontGhostMeAbi, functionName: 'nextBountyId' }),
-      ])
-      let changed = false
-      for (let id = 1n; id < nextProjectId; id += 1n) {
-        const key = String(id)
-        if (!index.projectIds.includes(key)) {
-          index.projectIds.push(key)
-          changed = true
+      const index = readIndex()
+      const publicC = getPublic()
+      const address = getAddress()
+
+      // Prefer counter reads — Monad public RPC caps eth_getLogs to a tiny block range.
+      try {
+        // Sequential (not Promise.all) to stay under the public RPC request budget.
+        const nextProjectId = await publicC.readContract({
+          address,
+          abi: dontGhostMeAbi,
+          functionName: 'nextProjectId',
+        })
+        const nextBountyId = await publicC.readContract({
+          address,
+          abi: dontGhostMeAbi,
+          functionName: 'nextBountyId',
+        })
+        let changed = false
+        for (let id = 1n; id < nextProjectId; id += 1n) {
+          const key = String(id)
+          if (!index.projectIds.includes(key)) {
+            index.projectIds.push(key)
+            changed = true
+          }
         }
-      }
-      for (let id = 1n; id < nextBountyId; id += 1n) {
-        const key = String(id)
-        if (!index.bountyIds.includes(key)) {
-          index.bountyIds.push(key)
-          changed = true
+        for (let id = 1n; id < nextBountyId; id += 1n) {
+          const key = String(id)
+          if (!index.bountyIds.includes(key)) {
+            index.bountyIds.push(key)
+            changed = true
+          }
         }
+        if (changed) writeIndex(index)
+        syncIndexesDoneAt = Date.now()
+        return
+      } catch (error) {
+        console.warn('[viem] syncIndexes via counters failed, falling back to events', error)
       }
-      if (changed) writeIndex(index)
-      return
+
+      if (index.projectIds.length > 0 || index.bountyIds.length > 0) {
+        syncIndexesDoneAt = Date.now()
+        return
+      }
+
+      const fromBlock = deployFromBlock()
+      const latest = await publicC.getBlockNumber()
+      const span = 99n // Monad RPC: eth_getLogs limited to a 100-block range
+      let cursor = fromBlock
+      while (cursor <= latest) {
+        const toBlock = cursor + span > latest ? latest : cursor + span
+        const [projectLogs, bountyLogs] = await Promise.all([
+          publicC.getContractEvents({
+            address,
+            abi: dontGhostMeAbi,
+            eventName: 'ProjectCreated',
+            fromBlock: cursor,
+            toBlock,
+          }),
+          publicC.getContractEvents({
+            address,
+            abi: dontGhostMeAbi,
+            eventName: 'BountyCreated',
+            fromBlock: cursor,
+            toBlock,
+          }),
+        ])
+        for (const log of projectLogs) {
+          const id = String(log.args.projectId)
+          if (id && !index.projectIds.includes(id)) index.projectIds.push(id)
+        }
+        for (const log of bountyLogs) {
+          const id = String(log.args.bountyId)
+          if (id && !index.bountyIds.includes(id)) index.bountyIds.push(id)
+        }
+        cursor = toBlock + 1n
+      }
+      writeIndex(index)
+      syncIndexesDoneAt = Date.now()
     } catch (error) {
-      console.warn('[viem] syncIndexes via counters failed, falling back to events', error)
+      console.warn('[viem] syncIndexesFromEvents failed', error)
+    } finally {
+      syncIndexesInflight = null
     }
+  })()
 
-    if (index.projectIds.length > 0 || index.bountyIds.length > 0) return
-
-    const fromBlock = deployFromBlock()
-    const latest = await publicC.getBlockNumber()
-    const span = 99n // Monad RPC: eth_getLogs limited to a 100-block range
-    let cursor = fromBlock
-    while (cursor <= latest) {
-      const toBlock = cursor + span > latest ? latest : cursor + span
-      const [projectLogs, bountyLogs] = await Promise.all([
-        publicC.getContractEvents({
-          address,
-          abi: dontGhostMeAbi,
-          eventName: 'ProjectCreated',
-          fromBlock: cursor,
-          toBlock,
-        }),
-        publicC.getContractEvents({
-          address,
-          abi: dontGhostMeAbi,
-          eventName: 'BountyCreated',
-          fromBlock: cursor,
-          toBlock,
-        }),
-      ])
-      for (const log of projectLogs) {
-        const id = String(log.args.projectId)
-        if (id && !index.projectIds.includes(id)) index.projectIds.push(id)
-      }
-      for (const log of bountyLogs) {
-        const id = String(log.args.bountyId)
-        if (id && !index.bountyIds.includes(id)) index.bountyIds.push(id)
-      }
-      cursor = toBlock + 1n
-    }
-    writeIndex(index)
-  } catch (error) {
-    console.warn('[viem] syncIndexesFromEvents failed', error)
-  }
+  return syncIndexesInflight
 }
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
@@ -722,8 +830,21 @@ async function readChainProject(projectId: string): Promise<Project | undefined>
       functionName: 'getProject',
       args: [BigInt(projectId)],
     })
-  } catch {
-    // Stale browser index after Anvil restart — skip missing ids.
+  } catch (error) {
+    const text = [
+      (error as { shortMessage?: string })?.shortMessage,
+      (error as { details?: string })?.details,
+      (error as { message?: string })?.message,
+      String(error),
+    ]
+      .filter(Boolean)
+      .join('\n')
+    // Missing project after redeploy / stale index — skip quietly for list hydrates.
+    if (/Project not found/i.test(text)) return undefined
+    // Rate limits and RPC blips must not be mislabeled as "项目不存在".
+    if (isRpcRateLimited(error) || /RPC Request failed|timeout|network/i.test(text)) {
+      throw new Error(formatContractError(error, '读取项目失败，请稍后重试'))
+    }
     return undefined
   }
   if (!raw || raw.owner === '0x0000000000000000000000000000000000000000') return undefined
@@ -733,21 +854,35 @@ async function readChainProject(projectId: string): Promise<Project | undefined>
   const members: ProjectMember[] = []
 
   if (meta.members?.length) {
+    const addressable = meta.members.filter((member) => !isPlaceholderAddress(member.address))
+    const memberResults =
+      addressable.length > 0
+        ? await getPublic().multicall({
+            contracts: addressable.map((member) => ({
+              address: getAddress(),
+              abi: dontGhostMeAbi,
+              functionName: 'getMember' as const,
+              args: [BigInt(projectId), member.address as Address] as const,
+            })),
+            allowFailure: true,
+          })
+        : []
+
+    const onChainByAddress = new Map<string, (typeof memberResults)[number]>()
+    addressable.forEach((member, index) => {
+      onChainByAddress.set(member.address.toLowerCase(), memberResults[index])
+    })
+
     for (const member of meta.members) {
       let status: ProjectMember['status'] = member.pendingInvite ? 'invited' : 'invited'
       let depositLocked = false
       if (!isPlaceholderAddress(member.address)) {
-        try {
-          const onChain = await getPublic().readContract({
-            address: getAddress(),
-            abi: dontGhostMeAbi,
-            functionName: 'getMember',
-            args: [BigInt(projectId), member.address as Address],
-          })
-          status = deriveMemberStatus(onChain)
-          depositLocked = Boolean(onChain.active)
-        } catch {
-          // getMember reverts with "Member not found" before join — keep invited, do not fail hydrate.
+        const result = onChainByAddress.get(member.address.toLowerCase())
+        if (result?.status === 'success' && result.result) {
+          status = deriveMemberStatus(result.result)
+          depositLocked = Boolean(result.result.active)
+        } else {
+          // getMember reverts with "Member not found" before join — keep invited.
           status = 'invited'
           depositLocked = false
         }
@@ -1330,18 +1465,11 @@ export const viemContractService: ContractService = {
   },
 
   async proposeExpulsion(projectId, target, reason) {
-    const bond = await getPublic().readContract({
-      address: getAddress(),
-      abi: dontGhostMeAbi,
-      functionName: 'getRequiredExpulsionBond',
-      args: [BigInt(projectId)],
-    })
     const { hash } = await writeContract(
       'proposeExpulsion',
       currentAccountId(),
       'proposeExpulsionWithReason',
       [BigInt(projectId), target, reason],
-      bond,
     )
     return { hash, status: 'pending' }
   },
@@ -1362,7 +1490,8 @@ export const viemContractService: ContractService = {
   },
 
   async getProject(projectId) {
-    await syncIndexesFromEvents()
+    // Invite / single-project reads already know the id — avoid a redundant index sync.
+    rememberProjectId(projectId)
     return readChainProject(projectId)
   },
 
@@ -1378,7 +1507,7 @@ export const viemContractService: ContractService = {
   },
 
   async getBounty(bountyId) {
-    await syncIndexesFromEvents()
+    rememberBountyId(bountyId)
     return readChainBounty(bountyId)
   },
 
@@ -1468,16 +1597,26 @@ export const viemContractService: ContractService = {
     if (!isChainMode()) throw new Error('邀请席位仅用于公链模式')
     rememberProjectId(input.projectId)
 
-    const raw = await getPublic().readContract({
-      address: getAddress(),
-      abi: dontGhostMeAbi,
-      functionName: 'getProject',
-      args: [BigInt(input.projectId)],
-    })
-    if (!raw || raw.owner === ZERO_ADDRESS) {
-      throw new Error(`链上找不到项目 #${input.projectId}`)
+    let raw: {
+      owner: Address
+      depositAmount: bigint
     }
-    const owner = raw.owner as Address
+    try {
+      raw = (await getPublic().readContract({
+        address: getAddress(),
+        abi: dontGhostMeAbi,
+        functionName: 'getProject',
+        args: [BigInt(input.projectId)],
+      })) as typeof raw
+    } catch (error) {
+      throw new Error(formatContractError(error, '打开邀请时读取项目失败，请稍后重试'))
+    }
+    if (!raw || raw.owner === ZERO_ADDRESS) {
+      throw new Error(
+        `链上找不到项目 #${input.projectId}。若刚换过合约部署，请让创建者在新合约上重新创建承诺并复制邀请链接。`,
+      )
+    }
+    const owner = raw.owner
     const deposit = input.deposit || toDisplayMon(raw.depositAmount)
     const today = new Date().toISOString().slice(0, 10)
 

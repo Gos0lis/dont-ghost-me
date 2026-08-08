@@ -321,8 +321,32 @@ function pickActiveProjectId(
  * Works with mock OR viem (local Anvil / future Monad) — swap happens in contractService.ts.
  */
 export const designBackend = {
-  async hydrate(): Promise<DesignSnapshot> {
+  async hydrate(options?: {
+    /** Only load this project (invite open). Skips full index / bounty / governance burst. */
+    focusProjectId?: string
+  }): Promise<DesignSnapshot> {
     const meta = readMeta()
+    const focusProjectId = options?.focusProjectId
+
+    if (focusProjectId) {
+      const [wallet, project] = await Promise.all([
+        contractService.getWalletConnection(),
+        contractService.getProject(focusProjectId),
+      ])
+      const projects = project ? [project] : []
+      meta.activeProjectId = focusProjectId
+      if (project) meta.activeScene = sceneFromProject(project)
+      writeMeta(meta)
+      return {
+        wallet,
+        projects,
+        bounties: [],
+        activeProjectId: focusProjectId,
+        activeScene: meta.activeScene,
+        rescuePackages: meta.rescuePackages.filter((pkg) => pkg.projectId === focusProjectId),
+      }
+    }
+
     const [wallet, projects, bounties] = await Promise.all([
       contractService.getWalletConnection(),
       contractService.getProjects(),
@@ -355,22 +379,29 @@ export const designBackend = {
       const activeMembers = activeProject.members.filter(
         (member) => member.status === 'active' && member.depositLocked,
       )
-      const proposals = await Promise.all(
-        activeProject.members.map(async (member) => {
-          try {
-            const proposal = await contractService.getActiveExpulsionProposal!(
-              activeProject.id,
-              member.address,
-            )
-            return proposal ? { proposal, member } : undefined
-          } catch {
-            // Old deployments do not expose governance getters. The rest of the app
-            // should remain usable until the upgraded contract is redeployed.
-            return undefined
+      // Serial reads stay under Monad's 15 req/s public RPC cap.
+      let active:
+        | {
+            proposal: NonNullable<
+              Awaited<ReturnType<NonNullable<typeof contractService.getActiveExpulsionProposal>>>
+            >
+            member: (typeof activeProject.members)[number]
           }
-        }),
-      )
-      const active = proposals.find(Boolean)
+        | undefined
+      for (const member of activeProject.members) {
+        try {
+          const proposal = await contractService.getActiveExpulsionProposal!(
+            activeProject.id,
+            member.address,
+          )
+          if (proposal) {
+            active = { proposal, member }
+            break
+          }
+        } catch {
+          // Old deployments may lack governance getters.
+        }
+      }
       if (active) {
         const hasCurrentWalletVoted = wallet.account
           ? await contractService
@@ -625,7 +656,11 @@ export const designBackend = {
   async signMember(projectId: string, memberId: string) {
     await ensureWallet('caro')
     const project = await contractService.getProject(projectId)
-    if (!project) throw new Error('项目不存在')
+    if (!project) {
+      throw new Error(
+        `链上找不到项目 #${projectId}。若刚重新部署过合约，请让创建者新建承诺并重新复制邀请链接（旧链接会失效）。`,
+      )
+    }
     const member = project.members.find((item) => item.id === memberId)
     if (!member) throw new Error('成员不存在')
     if (member.status === 'active' || member.depositLocked) {
@@ -778,7 +813,7 @@ export const designBackend = {
     const meta = readMeta()
     meta.activeProjectId = input.projectId
     writeMeta(meta)
-    const snapshot = await this.hydrate()
+    const snapshot = await this.hydrate({ focusProjectId: input.projectId })
     const project = snapshot.projects.find((item) => item.id === input.projectId)
     if (!project) {
       throw new Error(

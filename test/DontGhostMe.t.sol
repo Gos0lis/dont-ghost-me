@@ -71,9 +71,8 @@ contract DontGhostMeTest is Test {
         internal
         returns (uint256 proposalId)
     {
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
         vm.prank(proposer);
-        proposalId = dgm.proposeExpulsion{value: bond}(projectId, target);
+        proposalId = dgm.proposeExpulsion(projectId, target);
     }
 
     function _createOpenBounty(uint256 projectId) internal returns (uint256 bountyId) {
@@ -233,21 +232,17 @@ contract DontGhostMeTest is Test {
         _seedThreeMembers(projectId);
 
         uint256 bond = dgm.getRequiredExpulsionBond(projectId);
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        assertEq(bond, 0);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.prank(owner);
         dgm.finishProject(projectId);
 
         dgm.executeExpulsion(proposalId);
-        assertEq(dgm.getPendingExpulsionBondRefund(alice), bond);
+        assertEq(dgm.getPendingExpulsionBondRefund(owner), bond);
         // Finish already auto-refunded deposits; expulsion against a finished project should not re-activate members.
         assertFalse(dgm.getMember(projectId, carol).active);
         assertTrue(dgm.getMember(projectId, carol).withdrawn);
-
-        uint256 aliceBefore = alice.balance;
-        vm.prank(alice);
-        dgm.withdrawExpulsionBondRefund();
-        assertEq(alice.balance, aliceBefore + bond);
     }
 
     function test_FinishProject_DistributesRemainingRescuePoolEqually() public {
@@ -599,50 +594,48 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
         vm.expectEmit(true, true, true, true);
-        emit ExpulsionProposed(1, projectId, alice, carol, bond);
+        emit ExpulsionProposed(1, projectId, owner, carol, 0);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         DontGhostMe.ExpulsionProposal memory proposal = dgm.getExpulsionProposal(proposalId);
         assertEq(proposal.id, proposalId);
         assertEq(proposal.projectId, projectId);
         assertEq(proposal.target, carol);
-        assertEq(proposal.proposer, alice);
+        assertEq(proposal.proposer, owner);
         assertEq(proposal.approveVotes, 0);
         assertEq(proposal.rejectVotes, 0);
         assertEq(proposal.deadline, block.timestamp + dgm.EXPULSION_VOTING_PERIOD());
-        assertEq(proposal.bondAmount, bond);
+        assertEq(proposal.bondAmount, 0);
         assertFalse(proposal.executed);
         assertEq(proposal.reason, "");
+        assertEq(dgm.getRequiredExpulsionBond(projectId), 0);
     }
 
     function test_ProposeExpulsionWithReason_StoresReasonAndActiveIndexes() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
 
         vm.expectEmit(true, false, false, true);
         emit ExpulsionReasonRecorded(1, "Missed two delivery checkpoints");
-        vm.prank(alice);
+        vm.prank(owner);
         uint256 proposalId =
-            dgm.proposeExpulsionWithReason{value: bond}(projectId, carol, "Missed two delivery checkpoints");
+            dgm.proposeExpulsionWithReason(projectId, carol, "Missed two delivery checkpoints");
 
         DontGhostMe.ExpulsionProposal memory proposal = dgm.getExpulsionProposal(proposalId);
         assertEq(proposal.reason, "Missed two delivery checkpoints");
         assertEq(dgm.getActiveExpulsionProposalByTarget(projectId, carol), proposalId);
-        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, alice), proposalId);
+        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, owner), proposalId);
     }
 
     function test_ProposeExpulsionWithReason_RevertsWhenReasonEmpty() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
 
-        vm.prank(alice);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.EmptyExpulsionReason.selector);
-        dgm.proposeExpulsionWithReason{value: bond}(projectId, carol, "");
+        dgm.proposeExpulsionWithReason(projectId, carol, "");
     }
 
     function test_ProposeExpulsion_RevertsWithFewerThanThreeMembers() public {
@@ -650,29 +643,42 @@ contract DontGhostMeTest is Test {
         _join(projectId, alice);
         _join(projectId, bob);
 
-        vm.prank(alice);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.InsufficientActiveMembers.selector);
         dgm.proposeExpulsion(projectId, bob);
     }
 
     function test_ProposeExpulsion_RevertsWhenSelfTarget() public {
         uint256 projectId = _createProject();
+        _join(projectId, owner);
+        _join(projectId, alice);
+        _join(projectId, bob);
+
+        vm.prank(owner);
+        vm.expectRevert(DontGhostMe.CannotExpelSelf.selector);
+        dgm.proposeExpulsion(projectId, owner);
+    }
+
+    function test_ProposeExpulsion_RevertsWhenNotProjectOwner() public {
+        uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
         vm.prank(alice);
-        vm.expectRevert(DontGhostMe.CannotExpelSelf.selector);
-        dgm.proposeExpulsion(projectId, alice);
+        vm.expectRevert("Only project owner");
+        dgm.proposeExpulsion(projectId, carol);
     }
 
     function test_ProposeExpulsion_RevertsWhenTargetAlreadyHasOpenProposal() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
+        _join(projectId, dave);
 
-        _proposeExpulsion(projectId, alice, carol);
+        _proposeExpulsion(projectId, owner, carol);
 
-        vm.prank(bob);
-        vm.expectRevert(DontGhostMe.TargetHasOpenProposal.selector);
-        dgm.proposeExpulsion(projectId, carol);
+        // Same proposer still has an open proposal; the target index remains locked.
+        vm.prank(owner);
+        vm.expectRevert(DontGhostMe.ProposerHasOpenProposal.selector);
+        dgm.proposeExpulsion(projectId, dave);
     }
 
     function test_ProposeExpulsion_RevertsWhenProposerAlreadyHasOpenProposal() public {
@@ -680,23 +686,20 @@ contract DontGhostMeTest is Test {
         _seedThreeMembers(projectId);
         _join(projectId, dave);
 
-        _proposeExpulsion(projectId, alice, carol);
+        _proposeExpulsion(projectId, owner, carol);
 
-        vm.prank(alice);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.ProposerHasOpenProposal.selector);
         dgm.proposeExpulsion(projectId, dave);
     }
 
-    function test_ProposeExpulsion_RequiresExactBond() public {
+    function test_ProposeExpulsion_RevertsWhenBondSent() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
-        uint256 requiredBond = dgm.getRequiredExpulsionBond(projectId);
 
-        vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(DontGhostMe.IncorrectExpulsionBond.selector, requiredBond, requiredBond - 1)
-        );
-        dgm.proposeExpulsion{value: requiredBond - 1}(projectId, carol);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(DontGhostMe.IncorrectExpulsionBond.selector, uint256(0), uint256(1)));
+        dgm.proposeExpulsion{value: 1}(projectId, carol);
     }
 
     function test_ExpulsionCooldown_AppliesAfterProposalExecution() public {
@@ -704,21 +707,20 @@ contract DontGhostMeTest is Test {
         _seedThreeMembers(projectId);
         _join(projectId, dave);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
         vm.warp(block.timestamp + dgm.EXPULSION_VOTING_PERIOD());
         dgm.executeExpulsion(proposalId);
 
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
-        vm.prank(alice);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.ExpulsionCooldownActive.selector);
-        dgm.proposeExpulsion{value: bond}(projectId, dave);
+        dgm.proposeExpulsion(projectId, dave);
 
-        vm.prank(bob);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.ExpulsionCooldownActive.selector);
-        dgm.proposeExpulsion{value: bond}(projectId, carol);
+        dgm.proposeExpulsion(projectId, carol);
 
         vm.warp(block.timestamp + dgm.EXPULSION_COOLDOWN());
-        _proposeExpulsion(projectId, alice, dave);
+        _proposeExpulsion(projectId, owner, dave);
     }
 
     function test_ExpulsionProposalLimit_RequiresProtocolAdminExtension() public {
@@ -726,16 +728,15 @@ contract DontGhostMeTest is Test {
         _seedThreeMembers(projectId);
 
         for (uint256 i = 0; i < dgm.DEFAULT_MAX_EXPULSION_PROPOSALS(); i++) {
-            uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+            uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
             vm.warp(block.timestamp + dgm.EXPULSION_VOTING_PERIOD());
             dgm.executeExpulsion(proposalId);
             vm.warp(block.timestamp + dgm.EXPULSION_COOLDOWN());
         }
 
-        uint256 bond = dgm.getRequiredExpulsionBond(projectId);
-        vm.prank(alice);
+        vm.prank(owner);
         vm.expectRevert(DontGhostMe.ExpulsionProposalLimitReached.selector);
-        dgm.proposeExpulsion{value: bond}(projectId, carol);
+        dgm.proposeExpulsion(projectId, carol);
 
         vm.prank(owner);
         vm.expectRevert(DontGhostMe.OnlyProtocolAdmin.selector);
@@ -744,7 +745,7 @@ contract DontGhostMeTest is Test {
         dgm.approveAdditionalExpulsions(projectId, 1);
         assertEq(dgm.getExpulsionProposalLimit(projectId), 11);
 
-        _proposeExpulsion(projectId, alice, carol);
+        _proposeExpulsion(projectId, owner, carol);
         assertEq(dgm.getExpulsionProposalCount(projectId), 11);
     }
 
@@ -752,7 +753,7 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.expectEmit(true, true, false, true);
         emit ExpulsionVoted(proposalId, alice, true);
@@ -770,11 +771,22 @@ contract DontGhostMeTest is Test {
         assertFalse(dgm.hasVoted(proposalId, carol));
     }
 
+    function test_VoteExpulsion_RevertsWhenTargetVotes() public {
+        uint256 projectId = _createProject();
+        _seedThreeMembers(projectId);
+
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
+
+        vm.prank(carol);
+        vm.expectRevert(DontGhostMe.CannotVoteAsExpulsionTarget.selector);
+        dgm.voteExpulsion(proposalId, false);
+    }
+
     function test_VoteExpulsion_RevertsOnDuplicateVote() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.prank(alice);
         dgm.voteExpulsion(proposalId, true);
@@ -788,7 +800,7 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.warp(block.timestamp + dgm.EXPULSION_VOTING_PERIOD());
 
@@ -797,11 +809,12 @@ contract DontGhostMeTest is Test {
         dgm.voteExpulsion(proposalId, true);
     }
 
-    function test_ExecuteExpulsion_PassesWithMajorityAndFundsRescuePool() public {
+    function test_ExecuteExpulsion_PassesWithMajorityAndCreatesRescueBounty() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        vm.prank(owner);
+        uint256 proposalId = dgm.proposeExpulsionWithReason(projectId, carol, "Missed two delivery checkpoints");
 
         // 3 active members => majority requires approveVotes > 1
         vm.prank(alice);
@@ -814,33 +827,37 @@ contract DontGhostMeTest is Test {
         vm.expectEmit(true, true, false, true);
         emit MemberExpelled(projectId, carol, DEPOSIT);
 
+        uint256 expectedBountyId = dgm.nextBountyId();
+        vm.expectEmit(true, true, true, true);
+        emit BountyCreated(expectedBountyId, projectId, owner, "Missed two delivery checkpoints", DEPOSIT);
+
         vm.prank(alice);
         dgm.executeExpulsion(proposalId);
 
         DontGhostMe.ExpulsionProposal memory proposal = dgm.getExpulsionProposal(proposalId);
         DontGhostMe.Member memory expelled = dgm.getMember(projectId, carol);
         DontGhostMe.Project memory project = dgm.getProject(projectId);
+        DontGhostMe.Bounty memory bounty = dgm.getBounty(expectedBountyId);
 
         assertTrue(proposal.executed);
         assertFalse(expelled.active);
         assertEq(expelled.deposit, 0);
         assertEq(project.rescuePool, DEPOSIT);
+        assertEq(project.reservedBounty, DEPOSIT);
+        assertEq(bounty.reward, DEPOSIT);
+        assertEq(bounty.creator, owner);
+        assertEq(uint256(bounty.status), uint256(DontGhostMe.BountyStatus.Open));
         assertEq(dgm.getActiveMemberCount(projectId), 2);
-        assertEq(dgm.getPendingExpulsionBondRefund(alice), proposal.bondAmount);
+        assertEq(dgm.getPendingExpulsionBondRefund(owner), 0);
         assertEq(dgm.getActiveExpulsionProposalByTarget(projectId, carol), 0);
-        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, alice), 0);
-
-        uint256 aliceBefore = alice.balance;
-        vm.prank(alice);
-        dgm.withdrawExpulsionBondRefund();
-        assertEq(alice.balance, aliceBefore + proposal.bondAmount);
+        assertEq(dgm.getActiveExpulsionProposalByProposer(projectId, owner), 0);
     }
 
     function test_ExecuteExpulsion_DoesNotExpelWithoutMajority() public {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         // Only one approve vote: 1 > 3/2 is false
         vm.prank(alice);
@@ -857,9 +874,8 @@ contract DontGhostMeTest is Test {
         assertTrue(proposal.executed);
         assertTrue(target.active);
         assertEq(target.deposit, DEPOSIT);
-        uint256 slashedBond = proposal.bondAmount * dgm.FAILED_EXPULSION_SLASH_BPS() / dgm.BPS_DENOMINATOR();
-        assertEq(project.rescuePool, slashedBond);
-        assertEq(dgm.getPendingExpulsionBondRefund(alice), proposal.bondAmount - slashedBond);
+        assertEq(project.rescuePool, 0);
+        assertEq(dgm.getPendingExpulsionBondRefund(owner), 0);
         assertEq(dgm.getActiveMemberCount(projectId), 3);
     }
 
@@ -867,7 +883,7 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.prank(alice);
         vm.expectRevert(DontGhostMe.ExpulsionVotingActive.selector);
@@ -878,7 +894,7 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.prank(alice);
         dgm.voteExpulsion(proposalId, true);
@@ -898,7 +914,7 @@ contract DontGhostMeTest is Test {
         uint256 projectId = _createProject();
         _seedThreeMembers(projectId);
 
-        uint256 proposalId = _proposeExpulsion(projectId, alice, carol);
+        uint256 proposalId = _proposeExpulsion(projectId, owner, carol);
 
         vm.prank(alice);
         dgm.voteExpulsion(proposalId, true);
@@ -915,13 +931,12 @@ contract DontGhostMeTest is Test {
 
         DontGhostMe.Project memory project = dgm.getProject(projectId);
         DontGhostMe.Member memory target = dgm.getMember(projectId, carol);
-        DontGhostMe.ExpulsionProposal memory proposal = dgm.getExpulsionProposal(proposalId);
-        uint256 slashedBond = proposal.bondAmount * dgm.FAILED_EXPULSION_SLASH_BPS() / dgm.BPS_DENOMINATOR();
 
-        assertEq(project.rescuePool, DEPOSIT + slashedBond);
+        assertEq(project.rescuePool, DEPOSIT);
+        assertEq(project.reservedBounty, 0);
         assertFalse(target.active);
         assertEq(target.deposit, DEPOSIT);
-        assertEq(dgm.getPendingExpulsionBondRefund(alice), proposal.bondAmount - slashedBond);
+        assertEq(dgm.getPendingExpulsionBondRefund(owner), 0);
         assertEq(dgm.getActiveMemberCount(projectId), 2);
     }
 

@@ -112,6 +112,7 @@ interface IDontGhostMe {
     error ProjectHasOpenExpulsions();
     error OnlyActiveMember();
     error CannotExpelSelf();
+    error CannotVoteAsExpulsionTarget();
     error TargetNotActive();
     error InsufficientActiveMembers();
     error TargetHasOpenProposal();

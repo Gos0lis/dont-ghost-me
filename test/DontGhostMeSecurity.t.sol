@@ -303,8 +303,9 @@ contract DontGhostMeSecurityTest is Test {
         interfaceContract.joinProject{value: 1 ether}(governanceProjectId);
 
         uint256 bond = interfaceContract.getRequiredExpulsionBond(governanceProjectId);
+        assertEq(bond, 0);
         vm.prank(owner);
-        uint256 proposalId = interfaceContract.proposeExpulsionWithReason{value: bond}(
+        uint256 proposalId = interfaceContract.proposeExpulsionWithReason(
             governanceProjectId, hunter, "No delivery updates"
         );
 
@@ -313,7 +314,7 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(proposal.projectId, governanceProjectId);
         assertEq(proposal.target, hunter);
         assertEq(proposal.proposer, owner);
-        assertEq(proposal.bondAmount, bond);
+        assertEq(proposal.bondAmount, 0);
         assertFalse(proposal.executed);
         assertEq(proposal.reason, "No delivery updates");
         assertEq(interfaceContract.getActiveExpulsionProposalByTarget(governanceProjectId, hunter), proposalId);

@@ -438,7 +438,7 @@
         <header class="governance-dialog-heading">
           <span>TEAM DECISION · 共同决定</span>
           <h2 id="governanceModalTitle">发起移除成员投票</h2>
-          <p>这不是管理员单方面踢人。提案公开后，所有活跃成员都有三天时间表态。</p>
+          <p>由创建者发起提案后，其他活跃成员（除被提议移除者外）有三天时间表态同意或反对。</p>
         </header>
 
         <div class="governance-dialog-layout">
@@ -459,21 +459,21 @@
           <aside class="governance-rules-note">
             <span>投票规则</span>
             <ol>
-              <li><b>01</b><p>投票持续 3 天，活跃成员一人一票。</p></li>
-              <li><b>02</b><p>严格过半才会移除，保证金进入救场池。</p></li>
-              <li><b>03</b><p>发起需锁定 <strong id="governanceBondAmount">0 MON</strong>，失败会罚没其中一半。</p></li>
+              <li><b>01</b><p>仅创建者可发起；投票持续 3 天，除目标外的活跃成员一人一票。</p></li>
+              <li><b>02</b><p>同意严格过半后强制退出，保证金转入救场悬赏。</p></li>
+              <li><b>03</b><p>发起提案<strong>无需</strong>额外保证金。</p></li>
             </ol>
             <div class="governance-consequence">
               <span>如果投票通过</span>
               <strong id="governanceTargetDeposit">0 MON</strong>
-              <small>该成员保证金将转入救场悬赏池</small>
+              <small>该成员保证金将自动发布为救场悬赏</small>
             </div>
           </aside>
         </div>
 
         <footer class="governance-dialog-actions">
           <button class="governance-cancel" id="governanceCancel" type="button">先不发起</button>
-          <button class="governance-submit" id="governanceSubmit" type="button">锁定提案保证金并发起</button>
+          <button class="governance-submit" id="governanceSubmit" type="button">发起移除投票</button>
         </footer>
       </section>
     </div>

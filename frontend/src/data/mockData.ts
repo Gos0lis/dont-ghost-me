@@ -185,7 +185,7 @@ export const governanceDemoProject: Project = {
       id: 'governance-demo-warning',
       type: 'warning',
       title: '成员进展异常',
-      description: 'Yunn 连续两次未提交进展，团队可以发起移除投票',
+      description: 'Yunn 连续两次未提交进展，创建者可发起移除投票',
       timestamp: '2026-08-07T15:30:00.000Z',
     },
   ],

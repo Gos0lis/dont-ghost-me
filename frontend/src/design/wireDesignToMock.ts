@@ -181,6 +181,7 @@ type DemoExpulsionVote = {
   projectId: string
   targetId: string
   targetName: string
+  targetAddress: string
   reason: string
   eligibleMembers: number
   votesByAddress: Record<string, 'approve' | 'reject'>
@@ -319,7 +320,12 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       renderAll()
       return snapshot
     } catch (error) {
-      const message = error instanceof Error ? error.message : '操作失败'
+      const message =
+        error instanceof Error
+          ? /RPC Request failed|requests limited|viem@/i.test(error.message)
+            ? 'Monad 测试网 RPC 暂时限流或繁忙，请等 1–2 秒再试'
+            : error.message
+          : '操作失败'
       showToast(`${label}失败：${message}`)
       console.error(error)
       return null
@@ -700,12 +706,16 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     if (!governanceMemberList || !governanceVoteSlip || !snapshot) return
 
     const walletAddress = snapshot.wallet.account?.address
+    const isCreator = addressesMatch(walletAddress, project.creatorAddress)
     const activeMembers = project.members.filter(isGovernanceActiveMember)
     const chainVote = snapshot.governance?.projectId === project.id ? snapshot.governance : null
     const demoVote = demoExpulsionVote?.projectId === project.id ? demoExpulsionVote : null
     const hasOpenVote = Boolean(chainVote || demoVote)
     const canOpenProposal =
-      designBackend.isActiveProjectStatus(project.status) && activeMembers.length >= 3 && !hasOpenVote
+      isCreator &&
+      designBackend.isActiveProjectStatus(project.status) &&
+      activeMembers.length >= 3 &&
+      !hasOpenVote
     const boardDescription = $('#governanceBoardDescription')
     if (boardDescription) {
       boardDescription.textContent =
@@ -713,7 +723,9 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
           ? `当前仅 ${activeMembers.length} 名成员完成确认并锁定保证金；至少需要 3 名活跃成员才能发起投票。`
           : hasOpenVote
             ? '已有一项移除投票进行中，结束前不能重复发起。'
-            : '有人长期不履约时，由成员共同决定是否移除。'
+            : isCreator
+              ? '有人长期不履约时，由你发起投票，其他成员共同决定是否移除。'
+              : '有人长期不履约时，由创建者发起投票；其他成员（除目标外）可同意或反对。'
     }
 
     governanceMemberList.innerHTML = project.members
@@ -770,6 +782,21 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       : walletAddress && demoVote
         ? demoVote.votesByAddress[walletAddress.toLowerCase()]
         : undefined
+    const isVoteTarget = chainVote
+      ? addressesMatch(walletAddress, chainVote.targetAddress)
+      : demoVote
+        ? addressesMatch(walletAddress, demoVote.targetAddress)
+        : false
+    const canCastVote =
+      Boolean(walletAddress) &&
+      !currentVote &&
+      !isVoteTarget &&
+      Boolean(
+        project.members.some(
+          (member) =>
+            addressesMatch(member.address, walletAddress) && isGovernanceActiveMember(member),
+        ),
+      )
     const passed = approveVotes > vote.eligibleMembers / 2
     setVoteText('#governanceApproveCount', String(approveVotes))
     setVoteText('#governanceRejectCount', String(rejectVotes))
@@ -784,16 +811,18 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
         ? chainVote && Date.now() < chainVote.deadline * 1000
           ? `已获得 ${approveVotes}/${vote.eligibleMembers} 票同意，达到严格过半；需等到 ${new Date(chainVote.deadline * 1000).toLocaleString('zh-CN')} 后执行。`
           : `已获得 ${approveVotes}/${vote.eligibleMembers} 票同意，达到严格过半，可以执行移除。`
-        : currentVote
-          ? chainVote
-            ? `你已经投过票。投票将于 ${new Date(chainVote.deadline * 1000).toLocaleString('zh-CN')} 截止。`
-            : `你已投${currentVote === 'approve' ? '同意' : '反对'}票，可切换演示账户继续测试。`
-          : chainVote
-            ? `每位活跃成员只能投一票；提案保证金 ${chainVote.bondAmount} ${unit()}，截止后才能执行结果。`
-            : '每位活跃成员只能投一票，Mock 可点击右上角钱包切换成员。'
+        : isVoteTarget
+          ? '你是本次投票的目标成员，不能参与表决。'
+          : currentVote
+            ? chainVote
+              ? `你已经投过票。投票将于 ${new Date(chainVote.deadline * 1000).toLocaleString('zh-CN')} 截止。`
+              : `你已投${currentVote === 'approve' ? '同意' : '反对'}票，可切换演示账户继续测试。`
+            : chainVote
+              ? `除目标成员外，每位活跃成员一票；无需提案保证金，截止后才能执行结果。`
+              : '除目标成员外，每位活跃成员一票；Mock 可点击右上角钱包切换成员。'
     }
     governanceVoteSlip.querySelectorAll<HTMLButtonElement>('[data-governance-vote]').forEach((button) => {
-      button.disabled = Boolean(currentVote)
+      button.disabled = !canCastVote
     })
     const execute = $('#governanceExecute') as HTMLButtonElement | null
     if (execute) {
@@ -989,12 +1018,10 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     activeGovernanceTargetId = memberId
     const avatar = target.name.trim().slice(0, 1).toUpperCase() || '·'
     const deposit = target.deposit || project.members[0]?.deposit || 0
-    const bond = Math.max(deposit * 0.1, 0)
     const values: Record<string, string> = {
       '#governanceTargetAvatar': avatar,
       '#governanceTargetName': target.name,
       '#governanceTargetTask': target.task || target.role,
-      '#governanceBondAmount': `${Number(bond.toFixed(4))} ${unit()}`,
       '#governanceTargetDeposit': `${deposit} ${unit()}`,
     }
     Object.entries(values).forEach(([selector, value]) => {
@@ -1026,6 +1053,12 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     const reasonField = $('#governanceReason') as HTMLTextAreaElement | null
     const reason = reasonField?.value.trim() ?? ''
     if (!project || !target) return
+    if (!addressesMatch(snapshot.wallet.account?.address, project.creatorAddress)) {
+      showToast('只有承诺创建者可以发起移除投票')
+      closeModal(governanceModal)
+      renderGovernance(project)
+      return
+    }
     if (!isGovernanceActiveMember(target)) {
       showToast('该成员尚未完成确认并锁定保证金，不能发起移除投票')
       closeModal(governanceModal)
@@ -1055,6 +1088,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
       projectId: project.id,
       targetId: target.id,
       targetName: target.name,
+      targetAddress: target.address,
       reason,
       eligibleMembers: Math.max(eligibleMembers, 1),
       votesByAddress: {},
@@ -1073,6 +1107,10 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     if (getChainMode() !== 'mock') {
       const proposal = snapshot.governance
       if (!proposal || proposal.hasCurrentWalletVoted) return
+      if (addressesMatch(snapshot.wallet.account.address, proposal.targetAddress)) {
+        showToast('被提议移除的成员不能参与本次投票')
+        return
+      }
       void run(support ? '投同意票' : '投反对票', () =>
         designBackend.voteExpulsion(proposal.proposalId, support),
       ).then((result) => {
@@ -1083,6 +1121,10 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     if (!demoExpulsionVote) return
     const voterAddress = snapshot.wallet.account.address.toLowerCase()
     if (demoExpulsionVote.votesByAddress[voterAddress]) return
+    if (addressesMatch(snapshot.wallet.account.address, demoExpulsionVote.targetAddress)) {
+      showToast('被提议移除的成员不能参与本次投票')
+      return
+    }
     const project = designBackend.getActiveProject(snapshot)
     const isActiveMember = project?.members.some(
       (member) =>
@@ -1133,15 +1175,7 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
           showToast('投票未通过，结果已结算')
           return
         }
-        const scene = sceneFromProject(project)
-        const published = await run('发布遗留救场任务', () =>
-          designBackend.spawnTicketsForRemovedMember(vote.projectId, vote.targetId, scene),
-        )
-        if (!published) {
-          showToast('成员已移除，但救场出票失败；请由发起人稍后重试')
-          return
-        }
-        showToast(`${vote.targetName} 已被移除 · 救场任务已发布到大厅`)
+        showToast(`${vote.targetName} 已被移除 · 保证金已自动发布为救场悬赏`)
       })()
       return
     }
@@ -2528,90 +2562,90 @@ export function wireDesignToMock(options?: DesignWireOptions): () => void {
     goTo('/rescue')
   })
 
-  // Initial hydrate — failures must not leave UI dead
-  void designBackend
-    .hydrate()
-    .then(async (initial) => {
-      snapshot = initial
-      renderAll()
+  // Initial hydrate — failures must not leave UI dead.
+  // Invite links skip the full hydrate burst (it doubles RPC load and trips Monad's 15/s cap).
+  const bootParams = new URLSearchParams(window.location.search)
+  const bootInvite =
+    inviteFromSearchParams(bootParams) ??
+    (getPath() === '/promises' ? readPendingInvite() : null)
 
-      const params = new URLSearchParams(window.location.search)
-      const inviteFromUrl = inviteFromSearchParams(params)
-      // Prefer URL; fall back to session pending only on /promises (after accidental query strip).
-      const invite =
-        inviteFromUrl ?? (getPath() === '/promises' ? readPendingInvite() : null)
+  const finishInviteOpen = (accepted: DesignSnapshot, invite: PendingInvite) => {
+    snapshot = accepted
+    renderAll()
 
-      if (getChainMode() === 'chain' && invite) {
-        writePendingInvite(invite)
-        // Keep invite query in the URL so refresh / share still works.
-        if (getPath() !== '/promises' || !inviteFromUrl) {
-          goTo(`/promises?${inviteSearchParams(invite).toString()}`)
-        } else {
-          syncRoute('/promises')
-        }
+    const openInviteConfirm = () => {
+      closeIntro()
+      openConfirmFlow(invite.memberId)
+    }
 
-        const accepted = await run('打开邀请', () => designBackend.acceptMemberInvite(invite))
-        if (!accepted) return
-        snapshot = accepted
+    if (!accepted.wallet.isConnected) {
+      showToast('请连接你自己的钱包，确认这份承诺')
+      openInviteConfirm()
+      trackTimeout(() => requestWalletConnect(), 280)
+    } else {
+      showToast('已打开邀请 · 用当前钱包确认你的席位')
+      trackTimeout(openInviteConfirm, 120)
+    }
+  }
+
+  if (getChainMode() === 'chain' && bootInvite) {
+    writePendingInvite(bootInvite)
+    if (getPath() !== '/promises') {
+      goTo(`/promises?${inviteSearchParams(bootInvite).toString()}`)
+    } else {
+      syncRoute('/promises')
+    }
+    void run('打开邀请', () => designBackend.acceptMemberInvite(bootInvite)).then((accepted) => {
+      if (!accepted) return
+      finishInviteOpen(accepted, bootInvite)
+    })
+  } else {
+    void designBackend
+      .hydrate()
+      .then(async (initial) => {
+        snapshot = initial
         renderAll()
 
-        const openInviteConfirm = () => {
-          closeIntro()
-          openConfirmFlow(invite.memberId)
+        if (getChainMode() !== 'chain' && bootInvite) {
+          showToast('邀请链接需要 Monad 公链模式（VITE_CHAIN_MODE=chain）')
         }
 
-        if (!accepted.wallet.isConnected) {
-          showToast('请连接你自己的钱包，确认这份承诺')
-          openInviteConfirm()
-          trackTimeout(() => requestWalletConnect(), 280)
-        } else {
-          showToast('已打开邀请 · 用当前钱包确认你的席位')
-          trackTimeout(openInviteConfirm, 120)
+        if (isOnChainBackend && initial.wallet.isConnected && initial.projects.length === 0) {
+          showToast(
+            getChainMode() === 'chain'
+              ? 'Monad 测试网已就绪 · 还没有项目，先创建一份承诺'
+              : '本地链已就绪 · 还没有项目，先创建一份承诺',
+          )
         }
-        return
-      }
+      })
+      .catch((error) => {
+        console.error('[design] hydrate failed', error)
+        snapshot = {
+          wallet: { isConnected: false },
+          projects: [],
+          bounties: [],
+          activeProjectId: '',
+          activeScene: 'hackathon',
+          rescuePackages: [],
+        }
+        renderAll()
 
-      if (getChainMode() !== 'chain' && inviteFromUrl) {
-        showToast('邀请链接需要 Monad 公链模式（VITE_CHAIN_MODE=chain）')
-      }
+        const params = new URLSearchParams(window.location.search)
+        const invite = inviteFromSearchParams(params)
+        if (getChainMode() === 'chain' && invite) {
+          showToast('链读取失败，仍可尝试打开邀请；请确认网络后连接钱包')
+          void run('打开邀请', () => designBackend.acceptMemberInvite(invite)).then((accepted) => {
+            if (!accepted) return
+            finishInviteOpen(accepted, invite)
+          })
+          return
+        }
 
-      if (isOnChainBackend && initial.wallet.isConnected && initial.projects.length === 0) {
         showToast(
-          getChainMode() === 'chain'
-            ? 'Monad 测试网已就绪 · 还没有项目，先创建一份承诺'
-            : '本地链已就绪 · 还没有项目，先创建一份承诺',
+          `链连接失败：${error instanceof Error ? error.message : getChainMode() === 'chain' ? '请检查 Monad RPC' : '请确认 Anvil 在运行'}`,
         )
-      }
-    })
-    .catch((error) => {
-      console.error('[design] hydrate failed', error)
-      snapshot = {
-        wallet: { isConnected: false },
-        projects: [],
-        bounties: [],
-        activeProjectId: '',
-        activeScene: 'hackathon',
-        rescuePackages: [],
-      }
-      renderAll()
-
-      // Still try to surface invite UI even if initial chain hydrate failed.
-      const params = new URLSearchParams(window.location.search)
-      const invite = inviteFromSearchParams(params)
-      if (getChainMode() === 'chain' && invite) {
-        showToast('链读取失败，仍可尝试打开邀请；请确认网络后连接钱包')
-        void run('打开邀请', () => designBackend.acceptMemberInvite(invite)).then((accepted) => {
-          if (!accepted) return
-          openConfirmFlow(invite.memberId)
-          if (!accepted.wallet.isConnected) requestWalletConnect()
-        })
-        return
-      }
-
-      showToast(
-        `链连接失败：${error instanceof Error ? error.message : getChainMode() === 'chain' ? '请检查 Monad RPC' : '请确认 Anvil 在运行'}`,
-      )
-    })
+      })
+  }
 
   // Double-click brand to reset workspace data (escape hatch)
   $('.brand')?.addEventListener('dblclick', (event) => {

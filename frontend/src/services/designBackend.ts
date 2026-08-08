@@ -15,7 +15,7 @@ import {
   scenePresets,
   ticketDraftToCreateInput,
 } from '../data/scenePresets'
-import { demoAccounts } from '../data/mockData'
+import { demoAccounts, GOVERNANCE_DEMO_PROJECT_ID } from '../data/mockData'
 import { contractService, isOnChainBackend } from './contractService'
 
 export interface DesignSnapshot {
@@ -25,6 +25,24 @@ export interface DesignSnapshot {
   activeProjectId: string
   activeScene: 'hackathon' | 'travel'
   rescuePackages: RescuePackageMeta[]
+  governance?: GovernanceSnapshot
+}
+
+export interface GovernanceSnapshot {
+  proposalId: string
+  projectId: string
+  targetId: string
+  targetName: string
+  targetAddress: `0x${string}`
+  proposerAddress: `0x${string}`
+  reason: string
+  approveVotes: number
+  rejectVotes: number
+  eligibleMembers: number
+  deadline: number
+  bondAmount: number
+  executed: boolean
+  hasCurrentWalletVoted: boolean
 }
 
 export interface CreatePromisePayload {
@@ -202,6 +220,88 @@ export function scaleRescueSubtasks(
   })
 }
 
+/** Publish a rescue package for a member whose deposit is already in the rescue pool. */
+async function spawnRescuePackage(
+  projectId: string,
+  memberId: string,
+  scene: 'hackathon' | 'travel',
+) {
+  // Bounties are owner-only. Mock/local demos switch back to the owner account here.
+  await ensureWallet('caro')
+
+  const packagePreset = rescuePackagePresets[scene]
+  const project = await contractService.getProject(projectId)
+  if (!project) throw new Error('无法读取待出票项目')
+
+  const sourceMember = project.members.find((member) => member.id === memberId)
+  if (!sourceMember || sourceMember.status !== 'quit') {
+    throw new Error('只能为已经退出或被移除的成员整理救场任务')
+  }
+
+  const availablePool = project.rescuePool - project.reservedBounty
+  if (!(availablePool > 0)) throw new Error('救场池为空，无法出票')
+
+  const templates = scaleRescueSubtasks(packagePreset.subtasks, availablePool)
+  const meta = readMeta()
+  const bountyIds: string[] = []
+  const packageId = `rescue-pkg-${Date.now()}`
+  const persistRescuePackage = () => {
+    if (bountyIds.length === 0) return
+    const pkg: RescuePackageMeta = {
+      id: packageId,
+      projectId,
+      scene,
+      title: packagePreset.title,
+      summary: packagePreset.summary,
+      category: packagePreset.category,
+      bountyIds: [...bountyIds],
+      sourceMemberId: memberId,
+      createdAt: new Date().toISOString(),
+    }
+    const existingIndex = meta.rescuePackages.findIndex((item) => item.id === packageId)
+    if (existingIndex >= 0) meta.rescuePackages[existingIndex] = pkg
+    else meta.rescuePackages.unshift(pkg)
+    writeMeta(meta)
+  }
+
+  let completed = 0
+  try {
+    for (const ticket of templates) {
+      await runTx(() =>
+        contractService.createBounty(ticketDraftToCreateInput(projectId, memberId, ticket)),
+      )
+      completed += 1
+      const allBounties = await contractService.getBounties()
+      const created =
+        allBounties.find(
+          (bounty) =>
+            bounty.projectId === projectId &&
+            bounty.title === ticket.title &&
+            bounty.status === 'open' &&
+            !bountyIds.includes(bounty.id),
+        ) ?? allBounties.find((bounty) => !bountyIds.includes(bounty.id) && bounty.projectId === projectId)
+      if (created) {
+        meta.ticketMeta[created.id] = ticket
+        bountyIds.push(created.id)
+        // Persist after every independent transaction so partial publication stays reachable.
+        persistRescuePackage()
+      }
+    }
+  } catch (error) {
+    persistRescuePackage()
+    const detail = error instanceof Error ? error.message : '未知错误'
+    throw new Error(
+      `出票中断：已完成 ${completed}/${templates.length} 笔，失败在第 ${completed + 1} 笔。${detail}`,
+    )
+  }
+
+  persistRescuePackage()
+  meta.activeScene = scene
+  meta.activeProjectId = projectId
+  meta.sceneProjectIds[scene] = projectId
+  writeMeta(meta)
+}
+
 function pickActiveProjectId(
   walletProjects: Project[],
   preferredId: string,
@@ -244,6 +344,57 @@ export const designBackend = {
     const activeProjectId = pickActiveProjectId(walletProjects, meta.activeProjectId)
     const activeProject = walletProjects.find((project) => project.id === activeProjectId)
     const activeScene = activeProject ? sceneFromProject(activeProject) : meta.activeScene
+
+    let governance: GovernanceSnapshot | undefined
+    if (
+      isOnChainBackend &&
+      activeProject &&
+      contractService.getActiveExpulsionProposal &&
+      contractService.hasVotedExpulsion
+    ) {
+      const activeMembers = activeProject.members.filter(
+        (member) => member.status === 'active' && member.depositLocked,
+      )
+      const proposals = await Promise.all(
+        activeProject.members.map(async (member) => {
+          try {
+            const proposal = await contractService.getActiveExpulsionProposal!(
+              activeProject.id,
+              member.address,
+            )
+            return proposal ? { proposal, member } : undefined
+          } catch {
+            // Old deployments do not expose governance getters. The rest of the app
+            // should remain usable until the upgraded contract is redeployed.
+            return undefined
+          }
+        }),
+      )
+      const active = proposals.find(Boolean)
+      if (active) {
+        const hasCurrentWalletVoted = wallet.account
+          ? await contractService
+              .hasVotedExpulsion(active.proposal.id, wallet.account.address)
+              .catch(() => false)
+          : false
+        governance = {
+          proposalId: active.proposal.id,
+          projectId: active.proposal.projectId,
+          targetId: active.member.id,
+          targetName: active.member.name,
+          targetAddress: active.proposal.target,
+          proposerAddress: active.proposal.proposer,
+          reason: active.proposal.reason,
+          approveVotes: active.proposal.approveVotes,
+          rejectVotes: active.proposal.rejectVotes,
+          eligibleMembers: activeMembers.length,
+          deadline: active.proposal.deadline,
+          bondAmount: active.proposal.bondAmount,
+          executed: active.proposal.executed,
+          hasCurrentWalletVoted,
+        }
+      }
+    }
 
     // Drop packages whose on-chain bounties are gone (e.g. Anvil restarted but localStorage remained).
     const bountyIdSet = new Set(bounties.map((bounty) => bounty.id))
@@ -322,6 +473,7 @@ export const designBackend = {
       // Keep all live packages so rescue hall can browse open tasks even before connect.
       // Wallet-scoped views filter again in listRescuePackages / profile render.
       rescuePackages: livePackages,
+      governance,
     }
   },
 
@@ -562,6 +714,33 @@ export const designBackend = {
     }
   },
 
+  async proposeExpulsion(projectId: string, memberId: string, reason: string) {
+    if (!isOnChainBackend || !contractService.proposeExpulsion) {
+      throw new Error('Mock 投票由演示界面处理')
+    }
+    const project = await contractService.getProject(projectId)
+    const target = project?.members.find((member) => member.id === memberId)
+    if (!target) throw new Error('目标成员不存在')
+    await runTx(() => contractService.proposeExpulsion!(projectId, target.address, reason))
+    return this.hydrate()
+  },
+
+  async voteExpulsion(proposalId: string, support: boolean) {
+    if (!isOnChainBackend || !contractService.voteExpulsion) {
+      throw new Error('Mock 投票由演示界面处理')
+    }
+    await runTx(() => contractService.voteExpulsion!(proposalId, support))
+    return this.hydrate()
+  },
+
+  async executeExpulsion(proposalId: string) {
+    if (!isOnChainBackend || !contractService.executeExpulsion) {
+      throw new Error('Mock 投票由演示界面处理')
+    }
+    await runTx(() => contractService.executeExpulsion!(proposalId))
+    return this.hydrate()
+  },
+
   /** Build a shareable join link for a pending member seat (chain mode). */
   buildMemberInviteLink(project: Project, memberId: string): string {
     const member = project.members.find((item) => item.id === memberId)
@@ -697,74 +876,17 @@ export const designBackend = {
     if (!alreadyQuit) {
       await runTx(() => contractService.quitProject(projectId, memberId))
     }
-    await ensureWallet('caro')
+    await spawnRescuePackage(projectId, memberId, scene)
+    return this.hydrate()
+  },
 
-    const projectAfterQuit = await contractService.getProject(projectId)
-    if (!projectAfterQuit) throw new Error('退出后无法读取项目')
-
-    const availablePool = projectAfterQuit.rescuePool - projectAfterQuit.reservedBounty
-    if (!(availablePool > 0)) {
-      if (alreadyQuit) return this.hydrate()
-      throw new Error('救场池为空，无法出票')
-    }
-
-    const templates = scaleRescueSubtasks(packagePreset.subtasks, availablePool)
-    const meta = readMeta()
-    const bountyIds: string[] = []
-    const packageId = `rescue-pkg-${Date.now()}`
-    const persistRescuePackage = () => {
-      if (bountyIds.length === 0) return
-      const pkg: RescuePackageMeta = {
-        id: packageId,
-        projectId,
-        scene,
-        title: packagePreset.title,
-        summary: packagePreset.summary,
-        category: packagePreset.category,
-        bountyIds: [...bountyIds],
-        sourceMemberId: memberId,
-        createdAt: new Date().toISOString(),
-      }
-      const existingIndex = meta.rescuePackages.findIndex((item) => item.id === packageId)
-      if (existingIndex >= 0) meta.rescuePackages[existingIndex] = pkg
-      else meta.rescuePackages.unshift(pkg)
-      writeMeta(meta)
-    }
-    let completed = 0
-    try {
-      for (const ticket of templates) {
-        await runTx(() =>
-          contractService.createBounty(ticketDraftToCreateInput(projectId, memberId, ticket)),
-        )
-        completed += 1
-        const allBounties = await contractService.getBounties()
-        const created =
-          allBounties.find(
-            (bounty) =>
-              bounty.projectId === projectId &&
-              bounty.title === ticket.title &&
-              bounty.status === 'open' &&
-              !bountyIds.includes(bounty.id),
-          ) ?? allBounties.find((bounty) => !bountyIds.includes(bounty.id) && bounty.projectId === projectId)
-        if (created) {
-          meta.ticketMeta[created.id] = ticket
-          bountyIds.push(created.id)
-          persistRescuePackage()
-        }
-      }
-    } catch (error) {
-      persistRescuePackage()
-      const detail = error instanceof Error ? error.message : '未知错误'
-      throw new Error(
-        `出票中断：已完成 ${completed}/${templates.length} 笔，失败在第 ${completed + 1} 笔。${detail}`,
-      )
-    }
-
-    persistRescuePackage()
-    meta.activeScene = scene
-    meta.activeProjectId = projectId
-    meta.sceneProjectIds[scene] = projectId
-    writeMeta(meta)
+  /** Publish rescue tasks after governance already removed the member and funded the pool. */
+  async spawnTicketsForRemovedMember(
+    projectId: string,
+    memberId: string,
+    scene: 'hackathon' | 'travel',
+  ): Promise<DesignSnapshot> {
+    await spawnRescuePackage(projectId, memberId, scene)
     return this.hydrate()
   },
 
@@ -921,6 +1043,27 @@ export const designBackend = {
     })
     // Drop legacy meta key from older demos.
     localStorage.removeItem('dont-ghost-me:design-meta:v1')
+    return this.hydrate()
+  },
+
+  async loadGovernanceDemo(): Promise<DesignSnapshot> {
+    if (getChainMode() !== 'mock' || !contractService.loadGovernanceDemo) {
+      throw new Error('投票演示只在 Mock 模式可用')
+    }
+    await contractService.loadGovernanceDemo()
+    const meta = readMeta()
+    meta.activeProjectId = GOVERNANCE_DEMO_PROJECT_ID
+    meta.activeScene = 'hackathon'
+    meta.sceneProjectIds.hackathon = GOVERNANCE_DEMO_PROJECT_ID
+    writeMeta(meta)
+    return this.hydrate()
+  },
+
+  async executeMockExpulsion(projectId: string, memberId: string): Promise<DesignSnapshot> {
+    if (getChainMode() !== 'mock' || !contractService.executeMockExpulsion) {
+      throw new Error('Mock 移除执行不可用')
+    }
+    await runTx(() => contractService.executeMockExpulsion!(projectId, memberId))
     return this.hydrate()
   },
 

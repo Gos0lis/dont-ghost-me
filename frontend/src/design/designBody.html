@@ -192,6 +192,9 @@
               <button class="page-tab is-active" type="button" data-promise-tab="active" role="tab" aria-selected="true">正在进行</button>
               <button class="page-tab" type="button" data-promise-tab="done" role="tab" aria-selected="false">已经完成</button>
             </div>
+            <button class="governance-demo-loader" id="governanceDemoLoader" type="button" hidden>
+              <span>MOCK LAB</span> 一键载入三人投票演示
+            </button>
 
             <div class="promise-tab-panel" data-promise-panel="create" hidden>
               <div class="workspace-empty">
@@ -228,6 +231,38 @@
                     <div><span>个人保证金</span><strong id="projectDeposit">0 <span data-native-symbol>ETH</span></strong></div>
                     <div><span>当前阶段</span><strong id="projectStage">—</strong></div>
                   </div>
+
+                  <section class="governance-board" aria-labelledby="governanceBoardTitle">
+                    <div class="governance-board-heading">
+                      <div>
+                        <span>TEAM PROMISE</span>
+                        <h4 id="governanceBoardTitle">团队成员</h4>
+                      </div>
+                      <p id="governanceBoardDescription">有人长期不履约时，由成员共同决定是否移除。</p>
+                    </div>
+                    <div class="governance-member-list" id="governanceMemberList"></div>
+
+                    <article class="governance-vote-slip" id="governanceVoteSlip" hidden aria-live="polite">
+                      <div class="governance-vote-stamp" aria-hidden="true">VOTE<br />OPEN</div>
+                      <div class="governance-vote-copy">
+                        <span>待处理投票</span>
+                        <h5>是否移除 <strong id="governanceVoteTarget">—</strong>？</h5>
+                        <p id="governanceVoteReason">—</p>
+                      </div>
+                      <div class="governance-vote-counts" aria-label="当前票数">
+                        <div><span>同意</span><strong id="governanceApproveCount">0</strong></div>
+                        <div><span>反对</span><strong id="governanceRejectCount">0</strong></div>
+                        <div><span>剩余</span><strong>2天23时</strong></div>
+                      </div>
+                      <div class="governance-vote-progress" aria-hidden="true"><i id="governanceVoteProgress"></i></div>
+                      <div class="governance-vote-actions">
+                        <button class="governance-reject-button" type="button" data-governance-vote="reject">不同意移除</button>
+                        <button class="governance-approve-button" type="button" data-governance-vote="approve">同意移除</button>
+                        <button class="governance-execute-button" id="governanceExecute" type="button" hidden>执行移除结果</button>
+                      </div>
+                      <small id="governanceVoteHint">每位活跃成员只能投一票，截止后执行链上结果。</small>
+                    </article>
+                  </section>
 
                   <div class="timeline" aria-label="项目状态">
                     <button class="timeline-item timeline-confirm-button" id="openConfirmFlow" type="button" aria-label="查看成员确认承诺流程"><i></i><span id="timelineOne">等待成员确认</span><small>查看确认过程</small></button>
@@ -394,6 +429,53 @@
           <svg viewBox="0 0 76 62"><use href="#mini-pigeon" /></svg><span>信鸽</span>
         </button>
       </nav>
+    </div>
+
+    <div class="governance-modal" id="governanceModal" aria-hidden="true">
+      <button class="governance-backdrop" id="governanceBackdrop" type="button" aria-label="关闭移除成员投票窗口"></button>
+      <section class="governance-dialog" role="dialog" aria-modal="true" aria-labelledby="governanceModalTitle">
+        <button class="governance-close" id="governanceClose" type="button" aria-label="关闭">×</button>
+        <header class="governance-dialog-heading">
+          <span>TEAM DECISION · 共同决定</span>
+          <h2 id="governanceModalTitle">发起移除成员投票</h2>
+          <p>这不是管理员单方面踢人。提案公开后，所有活跃成员都有三天时间表态。</p>
+        </header>
+
+        <div class="governance-dialog-layout">
+          <div class="governance-target-paper">
+            <span class="governance-paper-label">被提议移除</span>
+            <div class="governance-target-person">
+              <i id="governanceTargetAvatar">—</i>
+              <div><strong id="governanceTargetName">—</strong><small id="governanceTargetTask">—</small></div>
+              <em>待投票</em>
+            </div>
+            <label class="governance-reason-field">
+              <span>为什么发起这次投票？</span>
+              <textarea id="governanceReason" rows="4" maxlength="180" placeholder="例如：连续两次未提交进展，且 5 天没有回应团队消息"></textarea>
+              <small>理由会公开给所有成员，请只写可核实的履约事实。</small>
+            </label>
+          </div>
+
+          <aside class="governance-rules-note">
+            <span>投票规则</span>
+            <ol>
+              <li><b>01</b><p>投票持续 3 天，活跃成员一人一票。</p></li>
+              <li><b>02</b><p>严格过半才会移除，保证金进入救场池。</p></li>
+              <li><b>03</b><p>发起需锁定 <strong id="governanceBondAmount">0 MON</strong>，失败会罚没其中一半。</p></li>
+            </ol>
+            <div class="governance-consequence">
+              <span>如果投票通过</span>
+              <strong id="governanceTargetDeposit">0 MON</strong>
+              <small>该成员保证金将转入救场悬赏池</small>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="governance-dialog-actions">
+          <button class="governance-cancel" id="governanceCancel" type="button">先不发起</button>
+          <button class="governance-submit" id="governanceSubmit" type="button">锁定提案保证金并发起</button>
+        </footer>
+      </section>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

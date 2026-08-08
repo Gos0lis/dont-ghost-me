@@ -228,6 +228,7 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(IDontGhostMe.cancelSubmittedBounty.selector, DontGhostMe.cancelSubmittedBounty.selector);
         assertEq(IDontGhostMe.cancelStaleBounty.selector, DontGhostMe.cancelStaleBounty.selector);
         assertEq(IDontGhostMe.proposeExpulsion.selector, DontGhostMe.proposeExpulsion.selector);
+        assertEq(IDontGhostMe.proposeExpulsionWithReason.selector, DontGhostMe.proposeExpulsionWithReason.selector);
         assertEq(IDontGhostMe.approveAdditionalExpulsions.selector, DontGhostMe.approveAdditionalExpulsions.selector);
         assertEq(IDontGhostMe.voteExpulsion.selector, DontGhostMe.voteExpulsion.selector);
         assertEq(IDontGhostMe.executeExpulsion.selector, DontGhostMe.executeExpulsion.selector);
@@ -239,6 +240,14 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(IDontGhostMe.getProjectMembers.selector, DontGhostMe.getProjectMembers.selector);
         assertEq(IDontGhostMe.getBounty.selector, DontGhostMe.getBounty.selector);
         assertEq(IDontGhostMe.getExpulsionProposal.selector, DontGhostMe.getExpulsionProposal.selector);
+        assertEq(
+            IDontGhostMe.getActiveExpulsionProposalByTarget.selector,
+            DontGhostMe.getActiveExpulsionProposalByTarget.selector
+        );
+        assertEq(
+            IDontGhostMe.getActiveExpulsionProposalByProposer.selector,
+            DontGhostMe.getActiveExpulsionProposalByProposer.selector
+        );
         assertEq(IDontGhostMe.hasVoted.selector, DontGhostMe.hasVoted.selector);
         assertEq(IDontGhostMe.getRequiredExpulsionBond.selector, DontGhostMe.getRequiredExpulsionBond.selector);
         assertEq(IDontGhostMe.getExpulsionProposalCount.selector, DontGhostMe.getExpulsionProposalCount.selector);
@@ -295,7 +304,9 @@ contract DontGhostMeSecurityTest is Test {
 
         uint256 bond = interfaceContract.getRequiredExpulsionBond(governanceProjectId);
         vm.prank(owner);
-        uint256 proposalId = interfaceContract.proposeExpulsion{value: bond}(governanceProjectId, hunter);
+        uint256 proposalId = interfaceContract.proposeExpulsionWithReason{value: bond}(
+            governanceProjectId, hunter, "No delivery updates"
+        );
 
         IDontGhostMe.ExpulsionProposal memory proposal = interfaceContract.getExpulsionProposal(proposalId);
         assertEq(proposal.id, proposalId);
@@ -304,6 +315,9 @@ contract DontGhostMeSecurityTest is Test {
         assertEq(proposal.proposer, owner);
         assertEq(proposal.bondAmount, bond);
         assertFalse(proposal.executed);
+        assertEq(proposal.reason, "No delivery updates");
+        assertEq(interfaceContract.getActiveExpulsionProposalByTarget(governanceProjectId, hunter), proposalId);
+        assertEq(interfaceContract.getActiveExpulsionProposalByProposer(governanceProjectId, owner), proposalId);
     }
 
     function test_SubmittedBounty_CancellationUnblocksCompletion() public {

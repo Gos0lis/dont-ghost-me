@@ -421,6 +421,54 @@ export const dontGhostMeAbi = [
   },
   {
     "type": "function",
+    "name": "getActiveExpulsionProposalByProposer",
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getActiveExpulsionProposalByTarget",
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getExpulsionProposal",
     "inputs": [
       {
@@ -479,6 +527,11 @@ export const dontGhostMeAbi = [
             "name": "executed",
             "type": "bool",
             "internalType": "bool"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "internalType": "string"
           }
         ]
       }
@@ -883,6 +936,35 @@ export const dontGhostMeAbi = [
         "name": "target",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "proposalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "proposeExpulsionWithReason",
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [
@@ -1334,6 +1416,25 @@ export const dontGhostMeAbi = [
   },
   {
     "type": "event",
+    "name": "ExpulsionReasonRecorded",
+    "inputs": [
+      {
+        "name": "proposalId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ExpulsionVoted",
     "inputs": [
       {
@@ -1632,6 +1733,11 @@ export const dontGhostMeAbi = [
   {
     "type": "error",
     "name": "EmptyReviewReason",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyExpulsionReason",
     "inputs": []
   },
   {
